@@ -1,0 +1,537 @@
+@startuml Bad_Dopo_Cream_Presentation
+
+' ============================================
+' DIAGRAMA DE CLASES DE PRESENTACIÓN
+' Bad Dopo Cream - DOPO 2025
+' Arquitectura MVC - Capa de Presentación (Vista)
+' ============================================
+
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FEFEFE
+skinparam class {
+    BackgroundColor<<JFrame>> LightBlue
+    BackgroundColor<<JPanel>> LightGreen
+    BackgroundColor<<Configurator>> LightYellow
+    BackgroundColor<<Enum>> LightPink
+    BorderColor Black
+    ArrowColor Black
+}
+
+' ============================================
+' VENTANA PRINCIPAL
+' ============================================
+
+class BadDopoCreamGUI <<JFrame>> {
+    - game: BadDopoCream
+    - currentGameMode: String
+    - currentPlayer1Character: String
+    - currentPlayer2Character: String
+    - currentEnemyCharacter: String
+    - currentLevelNumber: int
+    + BadDopoCreamGUI()
+    + main(args: String[]): void
+    - showWelcomeScreen(): void
+    - showMenuPanel(): void
+    - showOptionsScreen(): void
+    - showGameModeSelection(): void
+    - showCharacterSelection(): void
+    - showPvPModeSelection(): void
+    - showLevelSelection(gameMode: String, ...): void
+    - showGameScreen(gameMode: String, ...): void
+    - restartGame(): void
+    - showSaveLoadScreen(): void
+    - changePanel(panel: JPanel): void
+    - initializeGameInBackend(...): void
+}
+
+' ============================================
+' PANTALLAS PRINCIPALES (JPANEL)
+' ============================================
+
+class WelcomeScreen <<JPanel>> {
+    - backgroundImage: Image
+    - titleLabel: JLabel
+    - startButton: JButton
+    - onStart: Runnable
+    + WelcomeScreen(onStart: Runnable)
+    - setupPanel(): void
+    - createComponents(): void
+    - layoutComponents(): void
+    - loadBackgroundImage(path: String): void
+    # paintComponent(g: Graphics): void
+}
+
+class MenuPanel <<JPanel>> {
+    - backgroundImage: Image
+    - newGameButton: JButton
+    - loadGameButton: JButton
+    - optionsButton: JButton
+    - creditsButton: JButton
+    - exitButton: JButton
+    - onNewGame: Runnable
+    - onLoadGame: Runnable
+    - onOptions: Runnable
+    - onCredits: Runnable
+    + MenuPanel()
+    + setOnNewGame(action: Runnable): void
+    + setOnLoadGame(action: Runnable): void
+    + setOnOptions(action: Runnable): void
+    + setOnCredits(action: Runnable): void
+    - setupPanel(): void
+    - createComponents(): void
+    - layoutComponents(): void
+    - styleButton(button: JButton, color: Color): void
+    # paintComponent(g: Graphics): void
+}
+
+class GameModeSelectionScreen <<JPanel>> {
+    - backgroundImage: Image
+    - normalModeButton: JButton
+    - pvpModeButton: JButton
+    - machineVsMachineButton: JButton
+    - backButton: JButton
+    - onNormalMode: Runnable
+    - onPvPMode: Runnable
+    - onMachineVsMachine: Runnable
+    - onBack: Runnable
+    + GameModeSelectionScreen(onBack: Runnable)
+    + setOnNormalMode(action: Runnable): void
+    + setOnPvPMode(action: Runnable): void
+    + setOnMachineVsMachine(action: Runnable): void
+    - setupPanel(): void
+    - createComponents(): void
+    - layoutComponents(): void
+    # paintComponent(g: Graphics): void
+}
+
+class CharacterSelectionScreen <<JPanel>> {
+    - backgroundImage: Image
+    - chocolateButton: JButton
+    - strawberryButton: JButton
+    - vanillaButton: JButton
+    - backButton: JButton
+    - onCharacterSelected: Consumer<String>
+    - onBack: Runnable
+    + CharacterSelectionScreen(onBack: Runnable)
+    + setOnCharacterSelected(action: Consumer<String>): void
+    - setupPanel(): void
+    - createComponents(): void
+    - layoutComponents(): void
+    # paintComponent(g: Graphics): void
+}
+
+class PvPModeSelectionScreen <<JPanel>> {
+    - backgroundImage: Image
+    - cooperativeButton: JButton
+    - versusButton: JButton
+    - backButton: JButton
+    - onCooperative: Runnable
+    - onVersus: Runnable
+    - onBack: Runnable
+    + PvPModeSelectionScreen(onBack: Runnable)
+    + setOnCooperative(action: Runnable): void
+    + setOnVersus(action: Runnable): void
+    - setupPanel(): void
+    - createComponents(): void
+    # paintComponent(g: Graphics): void
+}
+
+class PvPCharacterSelectionScreen <<JPanel>> {
+    - backgroundImage: Image
+    - selectedPlayer1: String
+    - selectedPlayer2: String
+    - player1Buttons: Map<String, JButton>
+    - player2Buttons: Map<String, JButton>
+    - confirmButton: JButton
+    - backButton: JButton
+    - onConfirm: BiConsumer<String, String>
+    - onBack: Runnable
+    + PvPCharacterSelectionScreen(onBack: Runnable)
+    + setOnConfirm(action: BiConsumer<String, String>): void
+    - setupPanel(): void
+    - createComponents(): void
+    - selectPlayer1Character(character: String): void
+    - selectPlayer2Character(character: String): void
+    # paintComponent(g: Graphics): void
+}
+
+class LevelSelectionScreen <<JPanel>> {
+    - backgroundImage: Image
+    - levelButtons: ArrayList<JButton>
+    - backButton: JButton
+    - onLevelSelected: Consumer<Integer>
+    - onBack: Runnable
+    + LevelSelectionScreen(onBack: Runnable, numLevels: int)
+    + setOnLevelSelected(action: Consumer<Integer>): void
+    - setupPanel(): void
+    - createLevelButtons(numLevels: int): void
+    - layoutComponents(): void
+    # paintComponent(g: Graphics): void
+}
+
+class LevelConfigurationScreen <<JPanel>> {
+    - levelNumber: int
+    - spinners: Map<String, JSpinner>
+    - applyButton: JButton
+    - cancelButton: JButton
+    - onApply: Consumer<LevelConfigurator>
+    - onCancel: Runnable
+    + LevelConfigurationScreen(levelNumber: int, onCancel: Runnable)
+    + setOnApply(action: Consumer<LevelConfigurator>): void
+    - setupPanel(): void
+    - createConfigurationPanel(): JPanel
+    - addSpinnerRow(panel: JPanel, ...): void
+    - applyConfiguration(): void
+    - createConfiguratorFromInputs(): LevelConfigurator
+}
+
+class GameScreen <<JPanel>> {
+    - game: BadDopoCream
+    - gameMode: String
+    - onBackAction: Runnable
+    - onRestartAction: Runnable
+    - aiController: IceCreamAI
+    - gamePanel: JPanel
+    - statusLabel: JLabel
+    - fruitsLabel: JLabel
+    - scoreLabel: JLabel
+    - timerLabel: JLabel
+    - pauseButton: JButton
+    - gameLoopTimer: Timer
+    - lastFrameTime: long
+    - playerColor: String
+    - player2Color: String
+    {static} - CELL_SIZE: int
+    {static} - MOVE_DELAY: long
+    + GameScreen(onBack: Runnable, onRestart: Runnable, game: BadDopoCream, gameMode: String)
+    + setPlayerColor(character: String): void
+    + setPlayer2Color(character: String): void
+    - setupComponents(): void
+    - setupKeyboardControls(): void
+    - startGameLoop(): void
+    - updateGame(): void
+    - renderGame(g: Graphics): void
+    - renderPlayer(g: Graphics, player: IceCream, character: String): void
+    - renderFruits(g: Graphics): void
+    - renderEnemies(g: Graphics): void
+    - renderObstacles(g: Graphics): void
+    - renderIceWalls(g: Graphics): void
+    - updateLabels(): void
+    - showLevelCompleteDialog(): void
+    - showVictoryDialog(title: String, message: String): void
+    - showGameOverDialog(title: String, message: String): void
+    - pauseGame(): void
+    - resumeGame(): void
+}
+
+class OptionsScreen <<JPanel>> {
+    - backgroundImage: Image
+    - volumeSlider: JSlider
+    - difficultyComboBox: JComboBox<String>
+    - applyButton: JButton
+    - backButton: JButton
+    - onBack: Runnable
+    + OptionsScreen(onBack: Runnable)
+    - setupPanel(): void
+    - createComponents(): void
+    - layoutComponents(): void
+    - applySettings(): void
+    # paintComponent(g: Graphics): void
+}
+
+class SaveLoadScreen <<JPanel>> {
+    - backgroundImage: Image
+    - saveSlots: ArrayList<JButton>
+    - backButton: JButton
+    - isSaveMode: boolean
+    - game: BadDopoCream
+    - onLoadSuccess: Runnable
+    - onBack: Runnable
+    + SaveLoadScreen(onBack: Runnable, isSaveMode: boolean, game: BadDopoCream)
+    + setOnLoadSuccess(action: Runnable): void
+    - setupPanel(): void
+    - createSaveSlots(): void
+    - handleSlotAction(slotIndex: int): void
+    - saveGame(slotIndex: int): void
+    - loadGame(slotIndex: int): void
+    - getSaveFileName(slotIndex: int): String
+    # paintComponent(g: Graphics): void
+}
+
+class LoadingScreen <<JPanel>> {
+    - progressBar: JProgressBar
+    - statusLabel: JLabel
+    - loadingTask: SwingWorker<Void, Integer>
+    + LoadingScreen(onComplete: Runnable)
+    - setupPanel(): void
+    - startLoading(onComplete: Runnable): void
+}
+
+' ============================================
+' COMPONENTES AUXILIARES
+' ============================================
+
+class KeyboardListener {
+    - gameScreen: GameScreen
+    - game: BadDopoCream
+    - level: Level
+    - pressedKeys: Set<Integer>
+    - lastActionTime: long
+    - lastActionTimePlayer2: long
+    {static} - ACTION_DELAY: long
+    + KeyboardListener(gameScreen: GameScreen, game: BadDopoCream)
+    + keyPressed(e: KeyEvent): void
+    + keyReleased(e: KeyEvent): void
+    - handleMovementKeys(): void
+    - handleIceKeys(): void
+    + reset(): void
+}
+
+class GameMenuBar {
+    - gameScreen: GameScreen
+    + GameMenuBar(gameScreen: GameScreen)
+    - createFileMenu(): JMenu
+    - createGameMenu(): JMenu
+    - createHelpMenu(): JMenu
+}
+
+' ============================================
+' CONFIGURADORES DE IMÁGENES
+' ============================================
+
+abstract class BaseImageConfigurator <<Configurator>> {
+    # {static} imageCache: Map<String, Image>
+    # {static} loadImage(path: String): Image
+    # {static} scaleImage(image: Image, width: int, height: int): Image
+}
+
+class CharacterImageConfigurator <<Configurator>> {
+    {static} - characterImages: Map<CharacterType, Image>
+    {static} - characterMovingImages: Map<CharacterType, Image>
+    {static} - characterIceImages: Map<CharacterType, Image>
+    {static} + initialize(): void
+    {static} + getCharacterImage(type: CharacterType): Image
+    {static} + getCharacterMovingImage(type: CharacterType): Image
+    {static} + getCharacterIceImage(type: CharacterType): Image
+    {static} - loadCharacterImages(type: CharacterType, basePath: String): void
+}
+
+class FruitImageConfigurator <<Configurator>> {
+    {static} - fruitImages: Map<String, Image>
+    {static} + initialize(): void
+    {static} + getFruitImage(fruitName: String): Image
+    {static} - loadFruitImages(): void
+}
+
+class EnemyImageConfigurator <<Configurator>> {
+    {static} - enemyImages: Map<EnemyType, Image>
+    {static} + initialize(): void
+    {static} + getEnemyImage(type: EnemyType): Image
+    {static} - loadEnemyImages(): void
+}
+
+class ObstacleImageConfigurator <<Configurator>> {
+    {static} - hotTileImage: Image
+    {static} - campfireLitImage: Image
+    {static} - campfireOffImage: Image
+    {static} + initialize(): void
+    {static} + getHotTileImage(): Image
+    {static} + getCampfireImage(isLit: boolean): Image
+}
+
+class ButtonImageConfigurator <<Configurator>> {
+    {static} + configureImageButton(button: JButton, normalPath: String, hoverPath: String, width: int, height: int): void
+    {static} - createImageIcon(path: String, width: int, height: int): ImageIcon
+}
+
+' ============================================
+' ENUMS
+' ============================================
+
+enum CharacterType <<Enum>> {
+    CHOCOLATE
+    STRAWBERRY
+    VANILLA
+    + getDisplayName(): String
+    + getBasePath(): String
+}
+
+enum EnemyType <<Enum>> {
+    MACETA
+    TROLL
+    CALAMAR_NARANJA
+    CALAMAR
+    NARVAL
+    + getDisplayName(): String
+    + getImagePath(): String
+}
+
+' ============================================
+' RELACIONES - HERENCIA DE JPANEL
+' ============================================
+
+javax.swing.JPanel <|-- WelcomeScreen
+javax.swing.JPanel <|-- MenuPanel
+javax.swing.JPanel <|-- GameModeSelectionScreen
+javax.swing.JPanel <|-- CharacterSelectionScreen
+javax.swing.JPanel <|-- PvPModeSelectionScreen
+javax.swing.JPanel <|-- PvPCharacterSelectionScreen
+javax.swing.JPanel <|-- LevelSelectionScreen
+javax.swing.JPanel <|-- LevelConfigurationScreen
+javax.swing.JPanel <|-- GameScreen
+javax.swing.JPanel <|-- OptionsScreen
+javax.swing.JPanel <|-- SaveLoadScreen
+javax.swing.JPanel <|-- LoadingScreen
+
+' ============================================
+' RELACIONES - HERENCIA DE CONFIGURADORES
+' ============================================
+
+BaseImageConfigurator <|-- CharacterImageConfigurator
+BaseImageConfigurator <|-- FruitImageConfigurator
+BaseImageConfigurator <|-- EnemyImageConfigurator
+BaseImageConfigurator <|-- ObstacleImageConfigurator
+
+' ============================================
+' RELACIONES - COMPOSICIÓN Y AGREGACIÓN
+' ============================================
+
+BadDopoCreamGUI "1" *-- "1" BadDopoCream : controla
+BadDopoCreamGUI "1" o-- "1" JPanel : muestra
+
+GameScreen "1" *-- "1" KeyboardListener : escucha eventos
+GameScreen "1" o-- "1" GameMenuBar : barra de menú
+GameScreen "1" o-- "1" IceCreamAI : IA (modo máquina)
+GameScreen "1" o-- "1" BadDopoCream : renderiza
+
+SaveLoadScreen "1" o-- "1" BadDopoCream : guarda/carga
+
+LevelConfigurationScreen ..> LevelConfigurator : crea
+
+' ============================================
+' RELACIONES - USO DE CONFIGURADORES
+' ============================================
+
+GameScreen ..> CharacterImageConfigurator : usa
+GameScreen ..> FruitImageConfigurator : usa
+GameScreen ..> EnemyImageConfigurator : usa
+GameScreen ..> ObstacleImageConfigurator : usa
+
+WelcomeScreen ..> ButtonImageConfigurator : usa
+MenuPanel ..> ButtonImageConfigurator : usa
+GameModeSelectionScreen ..> ButtonImageConfigurator : usa
+CharacterSelectionScreen ..> ButtonImageConfigurator : usa
+PvPCharacterSelectionScreen ..> ButtonImageConfigurator : usa
+
+CharacterImageConfigurator ..> CharacterType : usa
+EnemyImageConfigurator ..> EnemyType : usa
+
+' ============================================
+' RELACIONES - FLUJO DE NAVEGACIÓN
+' ============================================
+
+BadDopoCreamGUI ..> WelcomeScreen : inicia
+WelcomeScreen ..> MenuPanel : navega
+MenuPanel ..> GameModeSelectionScreen : navega
+MenuPanel ..> OptionsScreen : navega
+MenuPanel ..> SaveLoadScreen : navega
+
+GameModeSelectionScreen ..> CharacterSelectionScreen : Normal
+GameModeSelectionScreen ..> PvPModeSelectionScreen : PvP
+GameModeSelectionScreen ..> LevelSelectionScreen : Máquina vs Máquina
+
+CharacterSelectionScreen ..> LevelSelectionScreen : navega
+PvPModeSelectionScreen ..> PvPCharacterSelectionScreen : navega
+PvPCharacterSelectionScreen ..> LevelSelectionScreen : navega
+
+LevelSelectionScreen ..> LevelConfigurationScreen : configura (opcional)
+LevelSelectionScreen ..> GameScreen : inicia juego
+LevelConfigurationScreen ..> GameScreen : inicia juego
+
+' ============================================
+' RELACIONES CON DOMINIO
+' ============================================
+
+GameScreen ..> Level : renderiza
+GameScreen ..> Map : renderiza
+GameScreen ..> IceCream : renderiza
+GameScreen ..> Fruit : renderiza
+GameScreen ..> Enemy : renderiza
+GameScreen ..> IceWall : renderiza
+GameScreen ..> BaldosaCaliente : renderiza
+GameScreen ..> Fogata : renderiza
+
+KeyboardListener ..> Level : controla
+KeyboardListener ..> IceCream : mueve
+
+SaveLoadScreen ..> GameState : guarda/carga
+
+' ============================================
+' NOTAS EXPLICATIVAS
+' ============================================
+
+note top of BadDopoCreamGUI
+  Ventana principal (JFrame)
+  Controla navegación entre pantallas
+  Gestiona instancia única de BadDopoCream
+  Patrón MVC: Controlador
+end note
+
+note top of GameScreen
+  Pantalla principal del juego
+  Game loop a 60 FPS
+  Renderizado personalizado
+  Gestiona IA en modo máquina
+  Soporte para 1 o 2 jugadores
+end note
+
+note bottom of KeyboardListener
+  Maneja entrada del teclado
+  WASD: Jugador 1 movimiento
+  Q/E: Jugador 1 hielo
+  Flechas: Jugador 2 movimiento
+  Enter/Shift: Jugador 2 hielo
+  Cooldown entre acciones
+end note
+
+note right of BaseImageConfigurator
+  Patrón Singleton
+  Caché de imágenes
+  Carga lazy de recursos
+  Escalado de imágenes
+end note
+
+note left of CharacterType
+  Enum de personajes
+  CHOCOLATE, STRAWBERRY, VANILLA
+  Mapea a rutas de imágenes
+end note
+
+note left of EnemyType
+  Enum de enemigos
+  MACETA, TROLL, CALAMAR, etc.
+  Mapea a tipos de Enemy
+end note
+
+note bottom of SaveLoadScreen
+  3 slots de guardado
+  Formato JSON
+  Persistencia en disco
+  Carga con validación
+end note
+
+note top of LevelConfigurationScreen
+  Editor de niveles personalizado
+  Configura frutas, enemigos, obstáculos
+  Valores por defecto disponibles
+  Validación de parámetros
+end note
+
+note right of GameMenuBar
+  Menú de juego
+  Guardar/Cargar
+  Pausar/Reanudar
+  Opciones rápidas
+end note
+
+@enduml
