@@ -3,6 +3,7 @@
 ' ============================================
 ' DIAGRAMAS DE SECUENCIA - BadDopoCream
 ' Bad Dopo Cream - DOPO 2025
+' Última actualización: Diciembre 2025
 ' ============================================
 
 title Diagramas de Secuencia de BadDopoCream
@@ -20,56 +21,88 @@ title 1. Inicialización del Juego
 actor Usuario
 participant "GUI:BadDopoCreamGUI" as GUI
 participant "game:BadDopoCream" as Game
+participant "configScreen:LevelConfigurationScreen" as Config
 participant "builder:LevelBuilder" as Builder
-participant "config:LevelConfigurator" as Config
 participant "level:Level" as Level
 participant "map:Map" as Map
+participant "screen:GameScreen" as Screen
 
-Usuario -> GUI: Selecciona nivel y personajes
+Usuario -> GUI: Selecciona "Nuevo Juego"
 activate GUI
 
-GUI -> Game: new BadDopoCream()
-activate Game
-Game -> Game: levels = new ArrayList<>()
-Game -> Game: currentLevelIndex = 0
-Game -> Game: totalScore = 0
-Game -> Game: gameWon = false
-return
+GUI -> GUI: showGameModeSelection()
+GUI --> Usuario: Mostrar modos de juego
 
-GUI -> Config: getDefaultConfiguration(levelNumber)
+Usuario -> GUI: Selecciona modo (Player/PvsP/PvsM/MvsM)
+GUI -> GUI: showCharacterSelection()
+GUI --> Usuario: Mostrar selección de personaje
+
+Usuario -> GUI: Selecciona personaje y nombre
+GUI -> GUI: showLevelSelection()
+GUI --> Usuario: Mostrar niveles disponibles
+
+Usuario -> GUI: Selecciona nivel
+GUI -> Config: new LevelConfigurationScreen(...)
 activate Config
-Config -> Config: Crear configuración\ncon valores predeterminados
-return config
+Config --> Usuario: Mostrar configuración de nivel
 
-GUI -> Builder: buildLevel(levelNumber, config)
+Usuario -> Config: Configura frutas, enemigos, obstáculos
+Usuario -> Config: Presiona "INICIAR"
+
+Config -> Builder: new LevelBuilder(levelNumber)
 activate Builder
+
+Builder -> Builder: setMapSize(20, 15)
+Builder -> Builder: setPlayer1(iceCream)
+Builder -> Builder: setGrapes(count)
+Builder -> Builder: setBananas(count)
+Builder -> Builder: setCherries(count)
+Builder -> Builder: setPineapples(count)
+Builder -> Builder: setCactus(count)
+Builder -> Builder: setTrolls(count)
+Builder -> Builder: setMacetas(count)
+Builder -> Builder: setCalamares(count)
+Builder -> Builder: setNarvales(count)
+Builder -> Builder: setIceWalls(count)
+Builder -> Builder: setCampfires(count)
+Builder -> Builder: setHotTiles(count)
+
 Builder -> Level: new Level(levelNumber, width, height)
 activate Level
 Level -> Map: new Map(width, height)
 activate Map
+Map -> Map: Inicializar paredes del borde
 return map
-Level -> Level: Inicializar frutas, enemigos, timer
-return
+Level -> Level: Inicializar timer (3 minutos)
+return level
 
-Builder -> Builder: addObstacles(level, map, config)
-Builder -> Builder: addFruits(level, map, config)
-Builder -> Builder: addEnemies(level, map, config)
-
-Builder -> Level: setPlayer(iceCream)
-activate Level
-return
+Builder -> Builder: addFruitsOfType(level, positions, count, creator)
+Builder -> Builder: addEnemiesOfType(level, positions, count, creator)
+Builder -> Builder: Agregar obstáculos
 
 return level
 
-GUI -> Game: setCurrentLevel(level)
+Config -> GUI: onLevelStart.onStart(level)
+deactivate Config
+
+GUI -> Game: new BadDopoCream()
 activate Game
-Game -> Game: currentLevel = level
-Game -> Game: levels.add(level)
-Game -> Game: currentLevelIndex = levels.size() - 1
+Game -> Game: levels = new ArrayList<>()
+Game -> Game: totalScore = 0
+Game -> Game: player1Score = 0
+Game -> Game: player2Score = 0
 return
 
-GUI -> GUI: Crear GameScreen
-GUI -> Usuario: Mostrar pantalla de juego
+GUI -> Game: setCurrentLevel(level)
+activate Game
+return
+
+GUI -> Screen: new GameScreen(game, level, gameMode, ...)
+activate Screen
+Screen -> Screen: setupPanel()
+Screen -> Screen: startGameLoop()
+Screen --> Usuario: Mostrar pantalla de juego
+deactivate Screen
 
 deactivate GUI
 
@@ -81,94 +114,103 @@ deactivate GUI
 
 @startuml 02_Game_Loop_Update
 
-title 2. Game Loop - Actualización del Juego
+title 2. Game Loop - Actualización del Juego (60 FPS)
 
 participant "timer:Timer" as Timer
 participant "screen:GameScreen" as Screen
 participant "game:BadDopoCream" as Game
 participant "level:Level" as Level
-participant "enemies:ArrayList<Enemy>" as Enemies
-participant "fruits:ArrayList<Fruit>" as Fruits
+participant "enemies:List<Enemy>" as Enemies
+participant "fruits:List<Fruit>" as Fruits
 
 Timer -> Screen: actionPerformed() [cada 16ms]
 activate Screen
 
-Screen -> Game: update()
+Screen -> Game: isPaused()
 activate Game
+return false
 
-alt Nivel no completado y jugador vivo
+alt Juego no pausado
 
-    Game -> Level: moveEnemies()
+    Screen -> Level: getRemainingTime()
     activate Level
+    return remainingTime
     
-    loop para cada enemigo
-        Level -> Enemies: enemy.tryMove(playerLocation, map)
-        activate Enemies
-        Enemies -> Enemies: move(playerLocation, map)
-        Enemies -> Enemies: Validar posición
+    alt Tiempo > 0 y jugador vivo
+    
+        Screen -> Level: moveEnemies()
+        activate Level
+        
+        Level -> Level: getClosestPlayerLocation(enemyLocation)
+        note right: Obtiene ubicación del jugador\nmás cercano VIVO
+        
+        loop para cada enemigo
+            Level -> Enemies: enemy.move(closestPlayerLocation, map)
+            activate Enemies
+            
+            alt Troll
+                Enemies -> Enemies: Mover en línea recta
+                Enemies -> Enemies: Rebotar si hay obstáculo
+            else Maceta
+                Enemies -> Enemies: Perseguir al jugador
+                Enemies -> Enemies: No rompe hielo
+            else CalamarNaranja
+                Enemies -> Enemies: Perseguir al jugador
+                Enemies -> Enemies: Romper hielo si está en camino
+            else Narval
+                Enemies -> Enemies: Patrullar o embestir
+                Enemies -> Enemies: Si alineado con jugador -> charge()
+            end
+            
+            return
+            
+            Level -> Level: checkEnemyCollisions()
+            
+            alt Colisión con jugador vivo
+                Level -> Level: player.die()
+                Level -> Level: gameOver = true
+            end
+        end
+        
         return
         
-        Level -> Level: checkEnemyCollisions()
-        Level -> Level: Verificar colisión con jugador
-        alt Colisión detectada
-            Level -> Level: player.die()
-        end
-    end
-    
-    return
-    
-    Game -> Level: moveFruits()
-    activate Level
-    
-    loop para cada fruta
-        Level -> Fruits: fruit.canMove() && !fruit.isCollected()
-        activate Fruits
-        return true/false
+        Screen -> Level: moveFruits()
+        activate Level
         
-        alt Fruta se mueve
-            Level -> Fruits: fruit.move()
+        loop para cada fruta
+            Level -> Fruits: fruit.update()
             activate Fruits
-            Fruits -> Fruits: Calcular nueva posición
+            
+            alt Cherry (cada 20s)
+                Fruits -> Fruits: teleport() a posición aleatoria
+            else Cactus (cada 30s)
+                Fruits -> Fruits: toggleSpikes()
+            else Pineapple
+                Fruits -> Fruits: move() aleatoriamente
+            end
+            
             return
         end
         
-        Level -> Fruits: fruit.update()
-        activate Fruits
-        Fruits -> Fruits: Actualizar comportamiento especial
         return
-    end
-    
-    return
-    
-    alt Nivel completado
-        Game -> Level: isCompleted()
+        
+        Screen -> Level: isCompleted()
         activate Level
-        return true
+        return allFruitsCollected
         
-        Game -> Level: getCurrentScore()
-        activate Level
-        return score
-        
-        Game -> Game: totalScore += score
-        
-        Game -> Game: nextLevel()
-        activate Game
-        
-        alt Hay siguiente nivel
-            Game -> Game: currentLevelIndex++
-            Game -> Game: currentLevel = levels.get(currentLevelIndex)
-            return true
-        else No hay más niveles
-            Game -> Game: gameWon = true
-            return false
+        alt Nivel completado
+            Screen -> Screen: checkGameState()
+            Screen -> Screen: showVictoryDialog()
         end
+        
+    else Tiempo agotado
+        Screen -> Screen: showGameOverDialog("Tiempo Agotado")
     end
 
 end
 
-return
-
-Screen -> Screen: renderGame()
+Screen -> Screen: repaint()
+Screen -> Screen: renderGame(g)
 
 deactivate Screen
 
@@ -184,272 +226,237 @@ title 3. Movimiento del Jugador y Recolección de Frutas
 
 actor Usuario
 participant "listener:KeyboardListener" as Listener
+participant "screen:GameScreen" as Screen
+participant "game:BadDopoCream" as Game
 participant "level:Level" as Level
 participant "player:IceCream" as Player
 participant "map:Map" as Map
-participant "fruits:ArrayList<Fruit>" as Fruits
+participant "fruit:Fruit" as Fruit
 
-Usuario -> Listener: Presiona tecla WASD
+Usuario -> Listener: Presiona tecla (W/A/S/D)
 activate Listener
 
-Listener -> Level: movePlayer(dx, dy)
+Listener -> Level: getPlayer()
 activate Level
+return player
 
-Level -> Player: getLocation()
+Listener -> Player: isAlive()
 activate Player
-return currentLocation
+return true
 
-Level -> Map: isValidPosition(newLocation)
-activate Map
-Map -> Map: Verificar límites
-Map -> Map: Verificar paredes
-Map -> Map: Verificar hielo
-return true/false
+alt Jugador vivo
 
-alt Posición válida
-
-    Level -> Level: pushPineapples(dx, dy, playerLocation)
+    Listener -> Level: movePlayer(dx, dy)
     activate Level
-    loop para cada fruta
-        alt Fruta es Pineapple
-            Level -> Fruits: fruit.pushByPlayer(dx, dy, playerLocation)
-            activate Fruits
-            Fruits -> Fruits: Verificar si está en el camino
-            alt Está en el camino
-                Fruits -> Fruits: location = location.move(dx, dy)
-            end
-            return
-        end
-    end
-    deactivate Level
     
-    Level -> Player: move(dx, dy)
+    Level -> Player: getLocation()
     activate Player
-    Player -> Player: location = location.move(dx, dy)
-    return
+    return currentLocation
     
-    Level -> Level: checkFruitCollection(newLocation)
-    activate Level
+    Level -> Level: newLocation = currentLocation.move(dx, dy)
     
-    loop para cada fruta
-        Level -> Fruits: fruit.getLocation().equals(newLocation)
-        activate Fruits
-        return true/false
+    Level -> Map: isValidPosition(newLocation)
+    activate Map
+    return true
+    
+    Level -> Map: hasWall(newLocation)
+    activate Map
+    return false
+    
+    Level -> Map: hasIceWall(newLocation)
+    activate Map
+    return false
+    
+    Level -> Level: hasEnemyAt(newLocation)
+    
+    alt Posición válida y sin obstáculos
+    
+        Level -> Player: setLocation(newLocation)
+        activate Player
+        Player -> Player: lastDx = dx
+        Player -> Player: lastDy = dy
+        return
         
-        alt Fruta en posición y no recolectada
-            Level -> Fruits: fruit.collect()
-            activate Fruits
-            Fruits -> Fruits: collected = true
-            return points
+        Level -> Level: checkFruitCollection(newLocation)
+        
+        loop para cada fruta en newLocation
+            Level -> Fruit: isCollected()
+            activate Fruit
+            return false
             
-            Level -> Level: currentScore += points
-            Level -> Level: collectedFruits++
-            
-            alt Todas las frutas recolectadas
-                Level -> Level: isCompleted = true
+            alt Es Cactus con púas
+                Level -> Fruit: hasSpikes()
+                activate Fruit
+                return true
+                Level -> Player: die()
+            else Fruta normal
+                Level -> Fruit: collect()
+                activate Fruit
+                Fruit -> Fruit: collected = true
+                return points
+                
+                Level -> Level: currentScore += points
+                
+                Level -> Screen: Notificar recolección
+                Screen -> Game: addPlayer1Score(points)
             end
         end
+        
+        Level -> Level: checkCampfireCollision(newLocation)
+        
+        alt Fogata encendida en newLocation
+            Level -> Map: getCampfireAt(newLocation)
+            activate Map
+            return fogata
+            
+            Level -> Level: fogata.isLit()
+            alt Fogata encendida
+                Level -> Player: die()
+            end
+        end
+        
+        return true (movimiento exitoso)
+        
+    else Posición inválida
+        return false (no se movió)
     end
+
+else Jugador muerto
+    Listener -> Listener: Ignorar input
+end
+
+deactivate Listener
+
+@enduml
+
+' ============================================
+' 4. CREACIÓN Y DESTRUCCIÓN DE HIELO
+' ============================================
+
+@startuml 04_Creacion_Destruccion_Hielo
+
+title 4. Creación y Destrucción de Bloques de Hielo
+
+actor Usuario
+participant "listener:KeyboardListener" as Listener
+participant "level:Level" as Level
+participant "player:IceCream" as Player
+participant "map:Map" as Map
+participant "fogata:Fogata" as Fogata
+participant "hotTile:BaldosaCaliente" as HotTile
+
+== Crear Línea de Hielo ==
+
+Usuario -> Listener: Presiona Q (crear hielo)
+activate Listener
+
+Listener -> Level: createIceLine(lastDx, lastDy)
+activate Level
+
+Level -> Player: getLocation()
+activate Player
+return playerLocation
+
+Level -> Player: getLastDx(), getLastDy()
+activate Player
+return dx, dy
+
+Level -> Level: createIceLineFromPlayer(player, dx, dy)
+activate Level
+
+loop mientras posición válida
+    Level -> Level: nextPos = currentPos.move(dx, dy)
     
-    deactivate Level
+    Level -> Map: isValidPosition(nextPos)
+    activate Map
+    return true
     
-    Level -> Level: checkEnemyCollisions()
-    activate Level
-    loop para cada enemigo
-        alt Enemigo en posición del jugador
-            Level -> Player: die()
-            activate Player
-            Player -> Player: alive = false
+    Level -> Map: hasWall(nextPos)
+    activate Map
+    return false
+    
+    Level -> Map: hasIceWall(nextPos)
+    activate Map
+    return false
+    
+    Level -> Level: hasEnemyAt(nextPos)
+    Level -> Level: isPlayerAt(nextPos)
+    
+    alt Posición libre
+        Level -> Map: isHotTile(nextPos)
+        activate Map
+        return isHot
+        
+        alt Es baldosa caliente
+            Level -> Level: No crear hielo (se derrite)
+        else No es baldosa caliente
+            Level -> Map: addIceWall(new IceWall(nextPos))
+            activate Map
             return
         end
-    end
-    deactivate Level
-    
-    Level -> Level: checkCampfireCollisions()
-    Level -> Level: checkCactusCollisions()
-    
-    return true
-    
-else Posición inválida
-    return false
-end
-
-deactivate Level
-deactivate Listener
-
-@enduml
-
-' ============================================
-' 4. CREACIÓN DE LÍNEA DE HIELO
-' ============================================
-
-@startuml 04_Crear_Linea_Hielo
-
-title 4. Creación de Línea de Hielo
-
-actor Usuario
-participant "listener:KeyboardListener" as Listener
-participant "level:Level" as Level
-participant "player:IceCream" as Player
-participant "map:Map" as Map
-participant "hotTile:BaldosaCaliente" as HotTile
-participant "campfire:Fogata" as Campfire
-
-Usuario -> Listener: Presiona Q o E
-activate Listener
-
-Listener -> Level: createIceLine(dx, dy)
-activate Level
-
-Level -> Player: getLocation()
-activate Player
-return playerLocation
-
-Level -> Level: currentLoc = playerLocation
-
-loop Crear hielo en línea
-
-    Level -> Level: currentLoc = currentLoc.move(dx, dy)
-    
-    Level -> Map: isValidPosition(currentLoc)
-    activate Map
-    return valid
-    
-    alt Posición inválida
-        Level --> Listener: break (detener creación)
-    end
-    
-    Level -> Map: hasIceWall(currentLoc)
-    activate Map
-    return hasIce
-    
-    alt Ya hay hielo
-        Level --> Listener: break (detener creación)
-    end
-    
-    Level -> Level: Verificar si hay enemigo en currentLoc
-    alt Hay enemigo
-        Level --> Listener: break (detener creación)
-    end
-    
-    ' Crear hielo
-    Level -> Map: addIceWall(currentLoc)
-    activate Map
-    Map -> Map: iceWalls.add(new IceWall(currentLoc))
-    return
-    
-    ' Verificar baldosa caliente
-    Level -> Map: isHotTile(currentLoc)
-    activate Map
-    return isHot
-    
-    alt Es baldosa caliente
-        Level -> Map: removeIceWall(currentLoc)
-        activate Map
-        Map -> Map: iceWalls.remove(ice)
-        note right: El hielo se derrite\ninmediatamente
-        return
-    end
-    
-    ' Verificar fogata
-    Level -> Map: getCampfireAt(currentLoc)
-    activate Map
-    return campfire
-    
-    alt Hay fogata encendida
-        note right: El hielo queda sobre\nla fogata temporalmente
-    end
-
-end
-
-return
-
-deactivate Listener
-
-@enduml
-
-' ============================================
-' 5. ROMPER LÍNEA DE HIELO
-' ============================================
-
-@startuml 05_Romper_Linea_Hielo
-
-title 5. Romper Línea de Hielo
-
-actor Usuario
-participant "listener:KeyboardListener" as Listener
-participant "level:Level" as Level
-participant "player:IceCream" as Player
-participant "map:Map" as Map
-participant "campfire:Fogata" as Campfire
-
-Usuario -> Listener: Presiona Shift o Enter
-activate Listener
-
-Listener -> Level: breakIceLine(dx, dy)
-activate Level
-
-Level -> Player: getLocation()
-activate Player
-return playerLocation
-
-Level -> Level: currentLoc = playerLocation
-
-loop Romper hielo en línea
-
-    Level -> Level: currentLoc = currentLoc.move(dx, dy)
-    
-    Level -> Map: isValidPosition(currentLoc)
-    activate Map
-    return valid
-    
-    alt Posición inválida
-        Level --> Listener: break (detener)
-    end
-    
-    Level -> Map: hasIceWall(currentLoc)
-    activate Map
-    return hasIce
-    
-    alt No hay hielo
-        Level --> Listener: break (detener)
-    end
-    
-    ' Romper el hielo
-    Level -> Level: breakIceWall(currentLoc)
-    activate Level
-    
-    Level -> Map: hasIceWall(currentLoc)
-    activate Map
-    return true
-    
-    Level -> Map: removeIceWall(currentLoc)
-    activate Map
-    Map -> Map: iceWalls.remove(ice)
-    return
-    
-    ' Verificar si hay fogata
-    Level -> Map: getCampfireAt(currentLoc)
-    activate Map
-    return campfire
-    
-    alt Hay fogata encendida
-        Level -> Campfire: isLit()
-        activate Campfire
-        return true
         
-        Level -> Campfire: extinguish()
-        activate Campfire
-        Campfire -> Campfire: lit = false
-        Campfire -> Campfire: extinguishTime = currentTimeMillis()
-        note right: Fogata apagada\npor 10 segundos
-        return
+        Level -> Level: currentPos = nextPos
+    else Hay obstáculo
+        Level -> Level: Detener creación
     end
-    
-    deactivate Level
-
 end
 
+return
+return
+
+deactivate Listener
+
+== Romper Línea de Hielo ==
+
+Usuario -> Listener: Presiona E (romper hielo)
+activate Listener
+
+Listener -> Level: breakIceWall()
+activate Level
+
+Level -> Player: getLocation()
+activate Player
+return playerLocation
+
+Level -> Player: getLastDx(), getLastDy()
+activate Player
+return dx, dy
+
+Level -> Level: breakIceLineFromPosition(x, y, dx, dy)
+activate Level
+
+loop mientras haya hielo
+    Level -> Level: nextPos = currentPos.move(dx, dy)
+    
+    Level -> Map: getIceWallAt(nextPos)
+    activate Map
+    return iceWall
+    
+    alt Hay hielo en la posición
+        Level -> Map: removeIceWall(nextPos)
+        activate Map
+        return
+        
+        Level -> Map: getCampfireAt(nextPos)
+        activate Map
+        return fogata (o null)
+        
+        alt Hay fogata debajo del hielo
+            Level -> Fogata: extinguish()
+            activate Fogata
+            Fogata -> Fogata: lit = false
+            Fogata -> Fogata: extinguishTime = now()
+            return
+            note right: Fogata se reenciende\nen 10 segundos
+        end
+        
+        Level -> Level: currentPos = nextPos
+    else No hay hielo
+        Level -> Level: Detener destrucción
+    end
+end
+
+return
 return
 
 deactivate Listener
@@ -457,333 +464,467 @@ deactivate Listener
 @enduml
 
 ' ============================================
-' 6. AVANZAR AL SIGUIENTE NIVEL
+' 5. COMPORTAMIENTO DE ENEMIGOS
 ' ============================================
 
-@startuml 06_Avanzar_Siguiente_Nivel
+@startuml 05_Comportamiento_Enemigos
 
-title 6. Avanzar al Siguiente Nivel
+title 5. Comportamiento de los Enemigos
+
+participant "level:Level" as Level
+participant "troll:Troll" as Troll
+participant "maceta:Maceta" as Maceta
+participant "calamar:CalamarNaranja" as Calamar
+participant "narval:Narval" as Narval
+participant "map:Map" as Map
+
+Level -> Level: getClosestPlayerLocation(enemyLocation)
+note right: Encuentra jugador vivo más cercano\nusando distancia de Manhattan
+
+== Troll: Movimiento en Línea Recta ==
+
+Level -> Troll: move(playerLocation, map)
+activate Troll
+
+Troll -> Troll: newPos = location.move(dx, dy)
+Troll -> Map: isValidPosition(newPos)
+activate Map
+return valid
+
+alt Posición válida y sin obstáculos
+    Troll -> Troll: location = newPos
+else Obstáculo o borde
+    Troll -> Troll: reverseDirection()
+    note right: Cambia dx = -dx, dy = -dy
+end
+
+return
+
+== Maceta: Persigue al Jugador ==
+
+Level -> Maceta: move(playerLocation, map)
+activate Maceta
+
+Maceta -> Maceta: Calcular dirección hacia jugador
+Maceta -> Maceta: bestDx = sign(playerX - x)
+Maceta -> Maceta: bestDy = sign(playerY - y)
+
+Maceta -> Map: Verificar si puede moverse
+activate Map
+return canMove
+
+alt Puede moverse hacia jugador
+    Maceta -> Maceta: location = newPos
+else Bloqueado por hielo
+    Maceta -> Maceta: Buscar ruta alternativa
+    note right: No rompe hielo,\nbusca rodear
+end
+
+return
+
+== Calamar Naranja: Persigue y Rompe Hielo ==
+
+Level -> Calamar: move(playerLocation, map)
+activate Calamar
+
+Calamar -> Calamar: Calcular dirección hacia jugador
+
+Calamar -> Map: hasIceWall(nextPos)
+activate Map
+return hasIce
+
+alt Hay hielo en el camino
+    Calamar -> Calamar: breakingIce = true
+    Calamar -> Calamar: breakStartTime = now()
+    Calamar -> Map: removeIceWall(nextPos)
+    activate Map
+    return
+    note right: Rompe UN bloque\ny se detiene
+else No hay hielo
+    Calamar -> Calamar: Avanzar hacia jugador
+end
+
+return
+
+== Narval: Patrulla y Embiste ==
+
+Level -> Narval: move(playerLocation, map)
+activate Narval
+
+alt state == PATROLLING
+    Narval -> Narval: patrol(map)
+    activate Narval
+    Narval -> Narval: Mover en dirección actual
+    Narval -> Narval: Si obstáculo, cambiar dirección
+    return
+    
+    Narval -> Narval: checkForChargeOpportunity(playerLocation)
+    activate Narval
+    
+    alt Jugador alineado horizontal o vertical
+        Narval -> Narval: state = CHARGING
+        Narval -> Narval: chargeDirectionX/Y = hacia jugador
+        note right: Detecta alineación\ne inicia embestida
+    end
+    return
+
+else state == CHARGING
+    Narval -> Narval: charge(map)
+    activate Narval
+    
+    loop Velocidad de carga (2 celdas)
+        Narval -> Narval: nextPos = location.move(chargeDx, chargeDy)
+        
+        Narval -> Map: hasIceWall(nextPos)
+        activate Map
+        return hasIce
+        
+        alt Hay hielo
+            Narval -> Map: removeIceWall(nextPos)
+            note right: Destruye hielo\ndurante embestida
+        end
+        
+        Narval -> Narval: location = nextPos
+        
+        alt Llegó al borde o pared
+            Narval -> Narval: state = PATROLLING
+        end
+    end
+    return
+end
+
+return
+
+@enduml
+
+' ============================================
+' 6. IA DEL HELADO (JUGADOR MÁQUINA)
+' ============================================
+
+@startuml 06_IA_Helado
+
+title 6. IA del Helado - Perfiles de Comportamiento
+
+participant "aiTimer:Timer" as Timer
+participant "screen:GameScreen" as Screen
+participant "ai:IceCreamAI" as AI
+participant "level:Level" as Level
+participant "player:IceCream" as Player
+participant "pathFinder:PathFinder" as PathFinder
+
+Timer -> Screen: actionPerformed() [cada 200ms]
+activate Screen
+
+Screen -> AI: decideMove(level, player)
+activate AI
+
+AI -> Player: isAlive()
+activate Player
+return true
+
+alt Jugador vivo
+
+    alt profile == HUNGRY
+        AI -> AI: decideHungryMove(level, player)
+        activate AI
+        
+        AI -> AI: findNearestFruit(level, player)
+        note right: Busca fruta más cercana\nsin considerar enemigos
+        
+        AI -> PathFinder: getNextMove(playerPos, fruitPos, map)
+        activate PathFinder
+        return [dx, dy]
+        
+        return [dx, dy]
+        
+    else profile == FEARFUL
+        AI -> AI: decideFearfulMove(level, player)
+        activate AI
+        
+        AI -> AI: getEnemyDangerLevel(level, playerLocation)
+        note right: Calcula peligro en\ncada dirección
+        
+        alt Hay enemigos cerca (< 6 celdas)
+            AI -> AI: getSafestMove(level, player)
+            note right: Prioriza alejarse\nde enemigos
+        else No hay peligro
+            AI -> AI: findNearestFruit(level, player)
+        end
+        
+        return [dx, dy]
+        
+    else profile == EXPERT
+        AI -> AI: decideExpertMove(level, player)
+        activate AI
+        
+        AI -> AI: findSafestFruit(level, player)
+        note right: Balance entre\ndistancia y seguridad
+        
+        AI -> AI: isSafeFromEnemies(level, targetLocation)
+        
+        alt Ruta segura disponible
+            AI -> PathFinder: getNextMove(playerPos, safeTarget, map)
+            activate PathFinder
+            return [dx, dy]
+        else No hay ruta segura
+            AI -> AI: getSafestMove(level, player)
+            note right: Modo defensivo\nhasta que sea seguro
+        end
+        
+        return [dx, dy]
+    end
+    
+    return [dx, dy]
+
+else Jugador muerto
+    return [0, 0] (no mover)
+end
+
+Screen -> Level: movePlayer(dx, dy) o movePlayer2(dx, dy)
+activate Level
+return moved
+
+deactivate Screen
+
+@enduml
+
+' ============================================
+' 7. GUARDAR Y CARGAR PARTIDA
+' ============================================
+
+@startuml 07_Guardar_Cargar_Partida
+
+title 7. Guardar y Cargar Partida
+
+actor Usuario
+participant "screen:SaveLoadScreen" as Screen
+participant "game:BadDopoCream" as Game
+participant "state:GameState" as State
+participant "File System" as FS
+
+== Guardar Partida ==
+
+Usuario -> Screen: Ingresa nombre de partida
+Usuario -> Screen: Presiona "Guardar"
+activate Screen
+
+Screen -> Game: saveGame(playerColor, gameMode, saveName)
+activate Game
+
+Game -> State: new GameState()
+activate State
+State -> State: saveName = saveName
+State -> State: playerColor = playerColor
+State -> State: gameMode = gameMode
+State -> State: levelNumber = currentLevelNumber
+State -> State: totalScore = totalScore
+State -> State: player1Score = player1Score
+State -> State: player2Score = player2Score
+State -> State: timestamp = System.currentTimeMillis()
+return state
+
+Game -> FS: Serializar y guardar en saves/
+activate FS
+FS -> FS: ObjectOutputStream.writeObject(state)
+return success
+
+return true
+
+Screen --> Usuario: "Partida guardada exitosamente"
+
+deactivate Screen
+
+== Cargar Partida ==
+
+Usuario -> Screen: Selecciona partida de la lista
+Usuario -> Screen: Presiona "Cargar"
+activate Screen
+
+Screen -> Game: loadGame(saveName)
+activate Game
+
+Game -> FS: Leer archivo de saves/
+activate FS
+FS -> FS: ObjectInputStream.readObject()
+return data
+
+Game -> State: deserializar(data)
+activate State
+return state
+
+return state
+
+Screen -> Screen: onLoadSuccess.accept(state)
+
+Screen -> GUI: loadGameFromState(state)
+activate GUI
+
+GUI -> Game: restoreFromState(state)
+activate Game
+Game -> Game: totalScore = state.getTotalScore()
+Game -> Game: player1Score = state.getPlayer1Score()
+Game -> Game: player2Score = state.getPlayer2Score()
+return
+
+GUI -> GUI: Recrear nivel con configuración guardada
+GUI -> GUI: showGameScreen(...)
+
+GUI --> Usuario: Mostrar juego restaurado
+
+deactivate GUI
+deactivate Screen
+
+@enduml
+
+' ============================================
+' 8. SISTEMA DE HIGHSCORES
+' ============================================
+
+@startuml 08_Sistema_Highscores
+
+title 8. Sistema de HighScores
+
+actor Usuario
+participant "screen:GameScreen" as Screen
+participant "hsManager:HighScoreManager" as HSManager
+participant "File System" as FS
+
+== Verificar y Registrar HighScore ==
+
+Screen -> Screen: showVictoryDialog() o showGameOverDialog()
+activate Screen
+
+Screen -> Screen: Calcular puntaje final
+note right: finalScore = player1Score\n(o max(p1Score, p2Score) en PvsP)
+
+Screen -> HSManager: isHighScore(finalScore)
+activate HSManager
+
+HSManager -> HSManager: Comparar con top 10
+return true (es highscore)
+
+alt Es nuevo highscore
+
+    Screen -> Screen: getPositionForScore(finalScore)
+    Screen --> Usuario: showHighScoreEntry(score, position)
+    
+    Usuario -> Screen: Ingresa nombre
+    
+    Screen -> HSManager: addHighScore(name, score, gameMode, level)
+    activate HSManager
+    
+    HSManager -> HSManager: new HighScoreEntry(name, score, gameMode, level)
+    HSManager -> HSManager: highScores.add(entry)
+    HSManager -> HSManager: Collections.sort(highScores) // Por score descendente
+    HSManager -> HSManager: Mantener solo top 10
+    
+    HSManager -> FS: saveHighScores()
+    activate FS
+    FS -> FS: Escribir a highscores.dat
+    return
+    
+    return
+
+end
+
+Screen -> Screen: showHighScoresTable()
+activate Screen
+
+Screen -> HSManager: getHighScores()
+activate HSManager
+return List<HighScoreEntry>
+
+Screen -> Screen: Construir tabla HTML con scores
+Screen --> Usuario: Mostrar tabla de highscores
+
+deactivate Screen
+deactivate Screen
+
+== Ver HighScores desde Menú ==
+
+Usuario -> GUI: Presiona "HighScores" en menú
+activate GUI
+
+GUI -> GUI: showHighScoresScreen()
+GUI -> HSManager: getHighScores()
+activate HSManager
+return List<HighScoreEntry>
+
+GUI -> GUI: Construir JScrollPane con tabla
+GUI --> Usuario: Mostrar ventana de highscores
+
+deactivate GUI
+
+@enduml
+
+' ============================================
+' 9. VICTORIA Y FIN DE NIVEL
+' ============================================
+
+@startuml 09_Victoria_Fin_Nivel
+
+title 9. Victoria y Fin de Nivel
 
 participant "screen:GameScreen" as Screen
 participant "game:BadDopoCream" as Game
 participant "level:Level" as Level
-participant "dialog:JOptionPane" as Dialog
+participant "hsManager:HighScoreManager" as HSManager
+actor Usuario
 
 Screen -> Level: isCompleted()
 activate Level
+Level -> Level: Verificar todas las frutas recolectadas
 return true
 
-Screen -> Game: getCurrentLevelScore()
-activate Game
-Game -> Level: getCurrentScore()
-activate Level
-return score
-return score
-
-Screen -> Game: getCombinedScore()
-activate Game
-Game -> Game: totalScore + getCurrentLevelScore()
-return combinedScore
-
-Screen -> Dialog: showOptionDialog("Nivel Completado")
-activate Dialog
-Dialog -> Dialog: Mostrar:\n- Frutas recolectadas\n- Puntaje del nivel\n- Puntaje total
-Dialog --> Screen: choice (0=Siguiente, 1=Menú)
-deactivate Dialog
-
-alt Usuario elige Siguiente Nivel
-
-    Screen -> Level: getCurrentScore()
-    activate Level
-    return score
-    
-    Screen -> Game: addToTotalScore(score)
-    activate Game
-    Game -> Game: totalScore += score
-    return
-    
-    Screen -> Game: nextLevel()
-    activate Game
-    
-    Game -> Game: currentLevelIndex++
-    
-    alt Hay siguiente nivel
-        Game -> Game: currentLevel = levels.get(currentLevelIndex)
-        return true
-        
-        Screen -> Screen: onRestartAction.run()
-        note right: Crea nuevo GameScreen\ncon el siguiente nivel
-        
-    else No hay más niveles
-        Game -> Game: gameWon = true
-        return false
-        
-        Screen -> Dialog: showOptionDialog("¡Victoria Total!")
-        activate Dialog
-        Dialog --> Screen: choice
-        deactivate Dialog
-        
-        alt Usuario elige Jugar de Nuevo
-            Screen -> Screen: onRestartAction.run()
-            note right: Reinicia desde nivel 1
-        else Usuario elige Menú
-            Screen -> Screen: onBackAction.run()
-            note right: Volver al menú principal
-        end
-    end
-
-else Usuario elige Menú Principal
-    Screen -> Screen: onBackAction.run()
-end
-
-@enduml
-
-' ============================================
-' 7. GAME OVER
-' ============================================
-
-@startuml 07_Game_Over
-
-title 7. Game Over - Muerte del Jugador
-
-participant "timer:Timer" as Timer
-participant "screen:GameScreen" as Screen
-participant "game:BadDopoCream" as Game
-participant "level:Level" as Level
-participant "player:IceCream" as Player
-participant "dialog:JOptionPane" as Dialog
-
-Timer -> Screen: updateGame() [cada frame]
+Screen -> Screen: checkGameState()
 activate Screen
 
-Screen -> Game: update()
-activate Game
-
-Game -> Level: moveEnemies()
-activate Level
-
-Level -> Level: checkEnemyCollisions()
-activate Level
-
-loop para cada enemigo
-    alt Enemigo colisiona con jugador
-        Level -> Player: die()
-        activate Player
-        Player -> Player: alive = false
-        return
-    end
-end
-
-deactivate Level
-return
-
-return
-
-Screen -> Game: isGameOver()
-activate Game
-Game -> Level: isGameOver()
-activate Level
-Level -> Player: isAlive()
-activate Player
-return false
-deactivate Level
-return true
-return true
-
-alt Game Over detectado
-
-    Screen -> Screen: stopGameLoop()
-    
-    alt Muerte por enemigo
-        Screen -> Dialog: showGameOverDialog("💀 ¡Game Over!", mensaje)
-    else Tiempo agotado
-        Screen -> Dialog: showGameOverDialog("⏰ ¡Tiempo Agotado!", mensaje)
-    end
-    
-    activate Dialog
-    Dialog -> Dialog: Mostrar opciones:\n- Reiniciar Nivel\n- Menú Principal
-    Dialog --> Screen: choice
-    deactivate Dialog
-    
-    alt Usuario elige Reiniciar Nivel
-        Screen -> Screen: onRestartAction.run()
-        note right: Reinicia el nivel actual\nmanteniendo puntaje acumulado
-        
-    else Usuario elige Menú
-        Screen -> Screen: onBackAction.run()
-        note right: Volver al menú principal
-    end
-
-end
-
-deactivate Screen
-
-@enduml
-
-' ============================================
-' 8. GUARDAR PARTIDA
-' ============================================
-
-@startuml 08_Guardar_Partida
-
-title 8. Guardar Partida
-
-actor Usuario
-participant "screen:SaveLoadScreen" as Screen
-participant "game:BadDopoCream" as Game
-participant "state:GameState" as State
-participant "gson:Gson" as Gson
-participant "file:File" as File
-
-Usuario -> Screen: Click en slot de guardado
-activate Screen
-
-Screen -> State: new GameState(game)
-activate State
-
-State -> Game: getCurrentLevelNumber()
+Screen -> Game: getCurrentLevelNumber()
 activate Game
 return levelNumber
 
-State -> Game: getTotalScore()
-activate Game
-return totalScore
-
-State -> Game: getCurrentLevel()
-activate Game
-return level
-
-State -> State: Capturar estado del nivel:\n- Score del nivel\n- Frutas recolectadas\n- Tiempo restante\n- Posición jugadores\n- Estado frutas\n- Posición enemigos
-
-return state
-
-Screen -> Gson: toJson(state)
-activate Gson
-Gson -> Gson: Serializar objeto a JSON
-return json
-
-Screen -> File: write(json)
-activate File
-File -> File: Escribir en saves/slot_X.json
-return
-
-Screen -> Screen: Mostrar mensaje de éxito
-
-alt Error al guardar
-    Screen -> Screen: Mostrar error con\nBadDopoCream_Exceptions.SaveGameException
-end
-
-deactivate Screen
-
-@enduml
-
-' ============================================
-' 9. CARGAR PARTIDA
-' ============================================
-
-@startuml 09_Cargar_Partida
-
-title 9. Cargar Partida
-
-actor Usuario
-participant "screen:SaveLoadScreen" as Screen
-participant "file:File" as File
-participant "gson:Gson" as Gson
-participant "state:GameState" as State
-participant "game:BadDopoCream" as Game
-participant "level:Level" as Level
-
-Usuario -> Screen: Click en slot con partida guardada
-activate Screen
-
-Screen -> File: read(slotIndex)
-activate File
-File -> File: Leer saves/slot_X.json
-return json
-
-Screen -> Gson: fromJson(json, GameState.class)
-activate Gson
-Gson -> Gson: Deserializar JSON
-return state
-
-Screen -> State: validate()
-activate State
-State -> State: Verificar integridad de datos
-return valid
-
-alt Estado válido
-
-    Screen -> Game: restoreFromState(state)
+alt Hay más niveles (levelNumber < 3)
+    
+    Screen -> Screen: showLevelCompleteDialog()
+    Screen --> Usuario: "¡Nivel Completado!\n¿Continuar al siguiente nivel?"
+    
+    alt Usuario elige "Continuar"
+        Usuario -> Screen: Presiona "Siguiente Nivel"
+        Screen -> GUI: continueToNextLevel()
+        activate GUI
+        GUI -> Game: nextLevel()
+        GUI -> GUI: showLevelConfigurationScreen(levelNumber + 1)
+        deactivate GUI
+        
+    else Usuario elige "Menú Principal"
+        Usuario -> Screen: Presiona "Menú"
+        Screen -> GUI: showMenuPanel()
+    end
+    
+else Es el último nivel (levelNumber == 3)
+    
+    Screen -> Screen: showVictoryDialog("¡VICTORIA TOTAL!")
+    
+    Screen -> Game: getTotalScore()
     activate Game
-    
-    Game -> State: getCurrentLevelIndex()
-    activate State
-    return levelIndex
-    
-    Game -> Game: currentLevelIndex = levelIndex
-    Game -> Game: currentLevel = levels.get(levelIndex)
-    
-    Game -> State: getTotalScore()
-    activate State
     return totalScore
     
-    Game -> Game: this.totalScore = totalScore
-    Game -> Game: gameWon = false
+    Screen -> HSManager: isHighScore(totalScore)
+    activate HSManager
+    return isHighScore
     
-    Game -> Level: restoreFromState(state)
-    activate Level
-    
-    Level -> State: getLevelScore()
-    activate State
-    return levelScore
-    
-    Level -> Level: currentScore = levelScore
-    
-    Level -> State: getCollectedFruits()
-    activate State
-    return collected
-    
-    Level -> Level: collectedFruits = collected
-    
-    Level -> State: getRemainingTime()
-    activate State
-    return remainingTime
-    
-    Level -> Level: Recalcular levelStartTime
-    
-    Level -> State: getPlayerLocation()
-    activate State
-    return location
-    
-    Level -> Level: player.setLocation(location)
-    
-    Level -> State: getFruits()
-    activate State
-    return fruits[]
-    
-    loop para cada fruta guardada
-        Level -> Level: Buscar fruta correspondiente
-        alt Fruta fue recolectada
-            Level -> Level: fruit.collect()
-        end
+    alt Es highscore
+        Screen -> Screen: showHighScoreEntry(totalScore, position)
+        Usuario -> Screen: Ingresa nombre
+        Screen -> HSManager: addHighScore(...)
     end
     
-    Level -> State: getEnemies()
-    activate State
-    return enemies[]
+    Screen -> Screen: showHighScoresTable()
+    Screen --> Usuario: Mostrar tabla de highscores
     
-    loop para cada enemigo guardado
-        Level -> Level: Restaurar posición del enemigo
-    end
+    Usuario -> Screen: Presiona "Menú Principal"
+    Screen -> GUI: showMenuPanel()
     
-    return
-    return
-    
-    Screen -> Screen: onLoadSuccess.run()
-    note right: Crear GameScreen\ncon partida cargada
-    
-else Estado inválido
-    Screen -> Screen: Mostrar error con\nBadDopoCream_Exceptions.LoadGameException
 end
 
 deactivate Screen
@@ -791,127 +932,90 @@ deactivate Screen
 @enduml
 
 ' ============================================
-' 10. PAUSAR Y REANUDAR
+' 10. MODOS DE JUEGO MULTIJUGADOR
 ' ============================================
 
-@startuml 10_Pausar_Reanudar
+@startuml 10_Modos_Multijugador
 
-title 10. Pausar y Reanudar Juego
+title 10. Modos de Juego Multijugador
 
-actor Usuario
+actor "Jugador 1" as P1
+actor "Jugador 2" as P2
 participant "screen:GameScreen" as Screen
-participant "timer:Timer" as Timer
 participant "level:Level" as Level
-participant "dialog:JOptionPane" as Dialog
+participant "game:BadDopoCream" as Game
 
-== Pausar ==
+== Modo Cooperativo (PvsP) ==
 
-Usuario -> Screen: Presiona ESC o click botón Pausar
+note over P1, P2: Ambos jugadores son helados\nComparten objetivo: recolectar todas las frutas
+
+P1 -> Screen: Tecla W (mover arriba)
 activate Screen
-
-Screen -> Timer: stop()
-activate Timer
-Timer -> Timer: Detener game loop
-return
-
-Screen -> Level: pause()
+Screen -> Level: movePlayer(0, -1)
 activate Level
-Level -> Level: isPaused = true
-Level -> Level: lastPauseStart = currentTimeMillis()
-note right: Marcar inicio de pausa\npara no contar tiempo
+Level -> Level: Mover jugador 1
+Level -> Level: Si recolecta fruta -> score
 return
-
-Screen -> Dialog: showDialog("Juego Pausado")
-activate Dialog
-Dialog -> Dialog: Mostrar opciones:\n- Reanudar\n- Reiniciar Nivel\n- Menú Principal
-Dialog --> Screen: choice
-deactivate Dialog
-
-alt Usuario elige Reanudar
-
-    Screen -> Level: resume()
-    activate Level
-    Level -> Level: pausedTime += (currentTime - lastPauseStart)
-    Level -> Level: isPaused = false
-    Level -> Level: lastPauseStart = 0
-    note right: Acumular tiempo pausado\npara ajustar timer
-    return
-    
-    Screen -> Timer: start()
-    activate Timer
-    Timer -> Timer: Reanudar game loop
-    return
-
-else Usuario elige Reiniciar
-    Screen -> Screen: onRestartAction.run()
-    
-else Usuario elige Menú
-    Screen -> Screen: onBackAction.run()
-end
-
+Screen -> Game: addPlayer1Score(points)
 deactivate Screen
 
-@enduml
+P2 -> Screen: Tecla ↑ (mover arriba)
+activate Screen
+Screen -> Level: movePlayer2(0, -1)
+activate Level
+Level -> Level: Mover jugador 2
+Level -> Level: Si recolecta fruta -> score
+return
+Screen -> Game: addPlayer2Score(points)
+deactivate Screen
 
-@startuml BadDopoCream_Sequence_Overview
+note over P1, P2: Al final se muestran ambos puntajes\nAmbos deben sobrevivir para ganar
 
-title Resumen de Diagramas de Secuencia
+== Modo Competitivo (PvsM) ==
 
-note as N1
-**Diagramas Disponibles:**
+note over P1, P2: Jugador 1 = Helado\nJugador 2 = Enemigo (controlado por máquina o jugador)
 
-1. **Inicialización del Juego**
-   - Creación de BadDopoCream
-   - Construcción de niveles con LevelBuilder
-   - Configuración de mapa, frutas y enemigos
+P1 -> Screen: Tecla W (mover helado)
+activate Screen
+Screen -> Level: movePlayer(0, -1)
+Level -> Level: Mover helado
+Level -> Level: Recolectar frutas, evitar enemigos
+return
+deactivate Screen
 
-2. **Game Loop - Actualización**
-   - Ciclo principal a 60 FPS
-   - Movimiento de enemigos y frutas
-   - Detección de nivel completado
+P2 -> Screen: Tecla ↑ (mover enemigo)
+activate Screen
+Screen -> Level: moveEnemy(selectedEnemy, 0, -1)
+Level -> Level: Mover enemigo seleccionado
+Level -> Level: Intentar atrapar al helado
+return
+deactivate Screen
 
-3. **Movimiento y Recolección**
-   - Input del jugador
-   - Validación de movimiento
-   - Recolección de frutas y puntos
-   - Empuje de piñas
+note over P1, P2: Helado gana si recolecta todas las frutas\nEnemigo gana si atrapa al helado
 
-4. **Creación de Línea de Hielo**
-   - Crear hielo en dirección
-   - Interacción con baldosas calientes
-   - Interacción con fogatas
+== Modo MvsM (Machine vs Machine) ==
 
-5. **Romper Línea de Hielo**
-   - Destruir hielo
-   - Apagar fogatas temporalmente
+participant "ai1:IceCreamAI" as AI1
+participant "ai2:IceCreamAI" as AI2
 
-6. **Avanzar al Siguiente Nivel**
-   - Completar nivel
-   - Acumular puntaje
-   - Transición entre niveles
-   - Victoria total
+note over AI1, AI2: Ambos helados controlados por IA\nPueden tener diferentes perfiles
 
-7. **Game Over**
-   - Muerte del jugador
-   - Por enemigos o tiempo
-   - Opciones de reinicio
+loop Cada 200ms
+    Screen -> AI1: decideMove(level, player1)
+    activate AI1
+    AI1 -> AI1: Ejecutar estrategia según perfil
+    return [dx1, dy1]
+    
+    Screen -> Level: movePlayer(dx1, dy1)
+    
+    Screen -> AI2: decideMove(level, player2)
+    activate AI2
+    AI2 -> AI2: Ejecutar estrategia según perfil
+    return [dx2, dy2]
+    
+    Screen -> Level: movePlayer2(dx2, dy2)
+end
 
-8. **Guardar Partida**
-   - Capturar estado del juego
-   - Serialización a JSON
-   - Persistencia en disco
-
-9. **Cargar Partida**
-   - Lectura de archivo
-   - Deserialización
-   - Restauración completa del estado
-
-10. **Pausar y Reanudar**
-    - Detener game loop
-    - Gestión de timer
-    - Opciones en pausa
-end note
-
-@enduml
+note over AI1, AI2: Cada IA compite por recolectar frutas\nGana el que obtenga más puntos
 
 @enduml

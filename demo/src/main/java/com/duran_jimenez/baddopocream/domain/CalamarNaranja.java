@@ -4,7 +4,7 @@ import java.util.*;
 public class CalamarNaranja extends Calamar {
     
     private static final int SPEED = 2;
-    private static final int DETECTION_RANGE = 7;
+    private static final int DETECTION_RANGE = 999;
 
     private final Random random;
     private int movementCounter;

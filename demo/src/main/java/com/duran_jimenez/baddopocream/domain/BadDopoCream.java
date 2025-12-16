@@ -2,11 +2,29 @@ package com.duran_jimenez.baddopocream.domain;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Clase principal del juego Bad Dopo Cream.
+ * 
+ * Implementa el patrón Facade para encapsular toda la lógica del dominio
+ * y exponer una API limpia para la capa de presentación.
+ * 
+ * Responsabilidades:
+ * - Gestión del ciclo de vida del juego (inicio, pausa, fin)
+ * - Control de niveles y progresión
+ * - Sistema de puntaje y highscores
+ * - Guardado y carga de partidas
+ * - Interfaz unificada para la presentación (sin exponer clases internas)
+ * 
+ * @author Durán-Jiménez
+ * @version 2.0
+ */
 public class BadDopoCream implements FruitCounter {
     
-    // Constantes de niveles
-    public static final int MAX_LEVELS = 10; // Niveles totales planeados
-    public static final int PLAYABLE_LEVELS = 5; // Niveles actualmente jugables
+    /** Número máximo de niveles planeados para el juego */
+    public static final int MAX_LEVELS = 10;
+    
+    /** Número de niveles actualmente implementados y jugables */
+    public static final int PLAYABLE_LEVELS = 5;
     
     private final ArrayList<Level> levels;
     private int currentLevelIndex;
@@ -116,6 +134,26 @@ public class BadDopoCream implements FruitCounter {
         // Retorna puntaje total acumulado + puntaje del nivel actual
         return totalScore + getCurrentLevelScore();
     }
+    
+    /**
+     * Obtiene el puntaje del jugador 1 en el nivel actual
+     */
+    public int getPlayer1Score(){
+        if(currentLevel != null){
+            return currentLevel.getPlayer1Score();
+        }
+        return 0;
+    }
+    
+    /**
+     * Obtiene el puntaje del jugador 2 en el nivel actual
+     */
+    public int getPlayer2Score(){
+        if(currentLevel != null){
+            return currentLevel.getPlayer2Score();
+        }
+        return 0;
+    }
 
     public List<Level> getLevels(){
         return new ArrayList<>(this.levels);
@@ -196,7 +234,7 @@ public class BadDopoCream implements FruitCounter {
         if(player == null) return null;
         
         Location loc = player.getLocation();
-        return new PlayerInfo(loc.getX(), loc.getY(), player.isAlive(), player.getLastDx(), player.getLastDy());
+        return new PlayerInfo(loc.getX(), loc.getY(), player.isAlive(), player.getLastDx(), player.getLastDy(), player.getName(), player.getColor());
     }
     
     /**
@@ -208,7 +246,7 @@ public class BadDopoCream implements FruitCounter {
         if(player2 == null) return null;
         
         Location loc = player2.getLocation();
-        return new PlayerInfo(loc.getX(), loc.getY(), player2.isAlive(), player2.getLastDx(), player2.getLastDy());
+        return new PlayerInfo(loc.getX(), loc.getY(), player2.isAlive(), player2.getLastDx(), player2.getLastDy(), player2.getName(), player2.getColor());
     }
     
     /**

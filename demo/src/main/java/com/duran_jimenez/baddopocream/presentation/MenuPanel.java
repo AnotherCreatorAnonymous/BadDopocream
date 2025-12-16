@@ -1,16 +1,29 @@
 package com.duran_jimenez.baddopocream.presentation;
 
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
+import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+
 import javax.imageio.ImageIO;
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 public class MenuPanel extends JPanel{
     private Image backgroundImage;
     private JButton playButton;
     private JButton optionsButton;
     private JButton creditsButton;
+    private JButton highScoresButton;
     private JButton exitButton;
     
     // Constantes de color
@@ -98,13 +111,17 @@ public class MenuPanel extends JPanel{
         gbc.gridy = 3;
         add(creditsButton, gbc);
 
+        highScoresButton = createMenuButton("🏆 HIGHSCORES");
+        gbc.gridy = 4;
+        add(highScoresButton, gbc);
+
         exitButton = createMenuButton("");
         // Nota: No hay imágenes para SALIR, se mantiene con estilo estándar
         // Si deseas agregar imágenes, descomenta y proporciona las rutas:
         ButtonImageConfigurator.configureImageButton(exitButton, 
             "Recusos nuevos\\Boton salir.png", 
             "Recusos nuevos\\Boton salir.png");
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         add(exitButton, gbc);
     }
 
@@ -156,6 +173,12 @@ public class MenuPanel extends JPanel{
     public void setCreditsButtonListener(java.awt.event.ActionListener listener){
         if(creditsButton != null){
             creditsButton.addActionListener(listener);
+        }
+    }
+
+    public void setHighScoresButtonListener(java.awt.event.ActionListener listener){
+        if(highScoresButton != null){
+            highScoresButton.addActionListener(listener);
         }
     }
 

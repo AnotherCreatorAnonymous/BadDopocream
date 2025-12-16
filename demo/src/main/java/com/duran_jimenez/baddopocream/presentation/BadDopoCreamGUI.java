@@ -14,6 +14,7 @@ import javax.swing.UIManager;
 
 import com.duran_jimenez.baddopocream.domain.BadDopoCream;
 import com.duran_jimenez.baddopocream.domain.GameState;
+import com.duran_jimenez.baddopocream.domain.HighScoreManager;
 
 /**
  * Ventana principal del juego - Controlador en MVC
@@ -98,6 +99,7 @@ public class BadDopoCreamGUI extends JFrame {
         menuPanel.setPlayButtonListener(e -> showGameModeSelection());
         menuPanel.setOptionsButtonListener(e -> showOptionsScreen());
         menuPanel.setCreditsButtonListener(e -> showCreditsScreen());
+        menuPanel.setHighScoresButtonListener(e -> showHighScoresScreen());
         menuPanel.setExitButtonListener(e -> exitGame());
         
         changePanel(menuPanel);
@@ -116,6 +118,7 @@ public class BadDopoCreamGUI extends JFrame {
         // Configurar listeners para cada modo
         modeScreen.setNormalModeListener(() -> showNormalCharacterSelection());
         modeScreen.setPvPModeListener(() -> showCooperativeCharacterSelection());
+        modeScreen.setPlayerVsMachineListener(() -> showPlayerVsMachineCharacterSelection());
         modeScreen.setMachineVsMachineListener(() -> showMachineVsMachineScreen());
         
         changePanel(modeScreen);
@@ -184,7 +187,7 @@ public class BadDopoCreamGUI extends JFrame {
         
         characterScreen.setConfirmListener(() -> {
             ArrayList<String> selected = characterScreen.getSelectedCharacters();
-            String player1Character = selected.isEmpty() ? "pink" : selected.get(0);
+            String player1Character = selected.isEmpty() ? "strawberry" : selected.get(0);
             showLevelSelection("Normal", player1Character, null, null);
         });
         
@@ -199,8 +202,20 @@ public class BadDopoCreamGUI extends JFrame {
         
         characterScreen.setConfirmListener(() -> {
             ArrayList<String> selected = characterScreen.getSelectedCharacters();
-            String player1Character = selected.size() > 0 ? selected.get(0) : "pink";
+            String player1Character = selected.size() > 0 ? selected.get(0) : "strawberry";
             String player2Character = selected.size() > 1 ? selected.get(1) : "vanilla";
+            // Verificar que los personajes sean diferentes
+            if (player1Character.equals(player2Character)) {
+                // Si son iguales, asignar uno diferente al jugador 2
+                String[] characters = {"strawberry", "vanilla", "chocolate"};
+                for (String c : characters) {
+                    if (!c.equals(player1Character)) {
+                        player2Character = c;
+                        break;
+                    }
+                }
+            }
+            System.out.println("✓ Modo Cooperativo: Jugador1=" + player1Character + ", Jugador2=" + player2Character);
             showLevelSelection("PvP-Cooperativo", player1Character, player2Character, null);
         });
         // Configurar botón de volver
@@ -210,6 +225,33 @@ public class BadDopoCreamGUI extends JFrame {
             showGameModeSelection();
         });
         */
+        changePanel(characterScreen);
+    }
+    
+    /**
+     * Muestra selección de personaje para modo Competitivo (Jugador vs IA)
+     * El jugador selecciona su helado y competirá contra una IA controlada
+     */
+    private void showPlayerVsMachineCharacterSelection() {
+        CharacterSelectionScreen characterScreen = new CharacterSelectionScreen(1, () -> showGameModeSelection());
+        
+        characterScreen.setConfirmListener(() -> {
+            ArrayList<String> selected = characterScreen.getSelectedCharacters();
+            String player1Character = selected.isEmpty() ? "strawberry" : selected.get(0);
+            // Seleccionar un personaje aleatorio para la IA (diferente al jugador)
+            String[] aiCharacters = {"strawberry", "vanilla", "chocolate"};
+            java.util.List<String> availableForAI = new java.util.ArrayList<>();
+            for (String c : aiCharacters) {
+                if (!c.equals(player1Character)) {
+                    availableForAI.add(c);
+                }
+            }
+            // Seleccionar aleatoriamente entre los disponibles
+            String aiCharacter = availableForAI.get(new java.util.Random().nextInt(availableForAI.size()));
+            System.out.println("✓ Modo Competitivo: Jugador=" + player1Character + ", IA=" + aiCharacter);
+            showLevelSelection("PvsM-Competitivo", player1Character, aiCharacter, null);
+        });
+        
         changePanel(characterScreen);
     }
     
@@ -227,6 +269,8 @@ public class BadDopoCreamGUI extends JFrame {
                 showNormalCharacterSelection();
             } else if (gameMode.equals("PvP-Cooperativo")) {
                 showCooperativeCharacterSelection();
+            } else if (gameMode.equals("PvsM-Competitivo")) {
+                showPlayerVsMachineCharacterSelection();
             } else if (gameMode.equals("Machine-vs-Machine")) {
                 showGameModeSelection();
             }
@@ -496,7 +540,7 @@ public class BadDopoCreamGUI extends JFrame {
     
     /**
      * Crea una instancia de IceCream según el color seleccionado
-     * @param characterName Nombre del personaje ("pink", "vanilla", "chocolate")
+     * @param characterName Nombre del personaje ("strawberry", "vanilla", "chocolate")
      * @param startLocation Ubicación inicial
      * @return Instancia de IceCream
      */
@@ -506,21 +550,22 @@ public class BadDopoCreamGUI extends JFrame {
         String color;
         
         if (characterName != null) {
-            if (characterName.toLowerCase().contains("rosa") || characterName.toLowerCase().contains("pink")) {
-                name = "IceCream_Pink";
+            String lowerName = characterName.toLowerCase();
+            if (lowerName.contains("fresa") || lowerName.contains("strawberry") || lowerName.contains("pink") || lowerName.contains("rosa")) {
+                name = "Fresa";
                 color = "pink";
-            } else if (characterName.toLowerCase().contains("vainilla") || characterName.toLowerCase().contains("vanilla")) {
-                name = "IceCream_Vanilla";
+            } else if (lowerName.contains("vainilla") || lowerName.contains("vanilla") || lowerName.contains("cream")) {
+                name = "Vainilla";
                 color = "vanilla";
-            } else if (characterName.toLowerCase().contains("chocolate")) {
-                name = "IceCream_Chocolate";
+            } else if (lowerName.contains("chocolate") || lowerName.contains("brown")) {
+                name = "Chocolate";
                 color = "chocolate";
             } else {
-                name = "IceCream_Pink";
+                name = "Fresa";
                 color = "pink"; // Por defecto
             }
         } else {
-            name = "IceCream_Pink";
+            name = "Fresa";
             color = "pink";
         }
         
@@ -562,6 +607,75 @@ public class BadDopoCreamGUI extends JFrame {
             "Créditos",
             JOptionPane.INFORMATION_MESSAGE
         );
+    }
+
+    /**
+     * Muestra la pantalla de highscores
+     */
+    private void showHighScoresScreen() {
+        HighScoreManager highScoreManager = new HighScoreManager();
+        java.util.List<HighScoreManager.HighScoreEntry> scores = highScoreManager.getHighScores();
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><body style='font-family: Arial; padding: 15px; width: 480px;'>");
+        sb.append("<h2 style='text-align: center; color: #FFD700; margin-bottom: 15px;'>🏆 Tabla de Récords 🏆</h2>");
+        sb.append("<table style='width: 100%; border-collapse: collapse; font-size: 14px;'>");
+        sb.append("<tr style='background-color: #2c3e50; color: white;'>");
+        sb.append("<th style='padding: 10px; text-align: center;'>#</th>");
+        sb.append("<th style='padding: 10px; text-align: left;'>Jugador</th>");
+        sb.append("<th style='padding: 10px; text-align: right;'>Puntaje</th>");
+        sb.append("<th style='padding: 10px; text-align: center;'>Modo</th>");
+        sb.append("</tr>");
+        
+        if (scores.isEmpty()) {
+            sb.append("<tr><td colspan='4' style='text-align: center; padding: 30px; color: #7f8c8d;'>");
+            sb.append("No hay récords aún.<br>¡Juega para ser el primero!</td></tr>");
+        } else {
+            int position = 1;
+            for (HighScoreManager.HighScoreEntry entry : scores) {
+                String bgColor = position % 2 == 0 ? "#ecf0f1" : "#ffffff";
+                String medal = "";
+                if (position == 1) medal = "🥇 ";
+                else if (position == 2) medal = "🥈 ";
+                else if (position == 3) medal = "🥉 ";
+                
+                sb.append("<tr style='background-color: ").append(bgColor).append(";'>");
+                sb.append("<td style='padding: 8px; text-align: center; font-weight: bold;'>").append(medal).append(position).append("</td>");
+                sb.append("<td style='padding: 8px;'>").append(entry.getPlayerName()).append("</td>");
+                sb.append("<td style='padding: 8px; text-align: right; font-weight: bold; color: #27ae60;'>").append(entry.getScore()).append("</td>");
+                sb.append("<td style='padding: 8px; text-align: center; font-size: 12px;'>").append(formatGameModeDisplay(entry.getGameMode())).append("</td>");
+                sb.append("</tr>");
+                position++;
+            }
+        }
+        
+        sb.append("</table>");
+        sb.append("<p style='text-align: center; margin-top: 15px; color: #95a5a6; font-size: 11px;'>");
+        sb.append("Los mejores 10 puntajes se guardan automáticamente</p>");
+        sb.append("</body></html>");
+        
+        javax.swing.JLabel label = new javax.swing.JLabel(sb.toString());
+        label.setVerticalAlignment(javax.swing.JLabel.TOP);
+        
+        javax.swing.JScrollPane scrollPane = new javax.swing.JScrollPane(label);
+        scrollPane.setPreferredSize(new java.awt.Dimension(550, 520));
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        
+        JOptionPane.showMessageDialog(this, scrollPane, "🏆 Highscores", JOptionPane.PLAIN_MESSAGE);
+    }
+    
+    /**
+     * Formatea el modo de juego para mostrar en la tabla
+     */
+    private String formatGameModeDisplay(String mode) {
+        if (mode == null) return "Normal";
+        switch (mode) {
+            case "PvP-Cooperativo": return "Coop";
+            case "PvsM-Competitivo": return "vs IA";
+            case "Machine-vs-Machine": return "IA";
+            default: return "Normal";
+        }
     }
 
     /**

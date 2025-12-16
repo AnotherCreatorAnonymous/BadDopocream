@@ -1,29 +1,50 @@
 package com.duran_jimenez.baddopocream.domain;
 
-import java.util.*;
+import java.util.ArrayList;
 
+/**
+ * Representa el mapa de un nivel del juego.
+ * 
+ * Gestiona:
+ * - Grid bidimensional con tipos de celda (vacío, pared, hielo)
+ * - Obstáculos especiales (baldosas calientes, fogatas)
+ * - Validación de posiciones para movimiento
+ * 
+ * Tipos de celda:
+ * - EMPTY (0): Espacio transitable
+ * - WALL (1): Pared sólida (intransitable)
+ * - ICE (2): Pared de hielo (intransitable, puede romperse)
+ * 
+ * @author Durán-Jiménez
+ */
 public class Map {
-    private int width;
-    private int height;
-    private int[][] grid;
-    private ArrayList<BaldosaCaliente> hotTiles;
-    private ArrayList<Fogata> campfires;
     
+    /** Celda vacía - transitable */
     public static final int EMPTY = 0;
+    
+    /** Pared sólida - intransitable */
     public static final int WALL = 1;
+    
+    /** Pared de hielo - intransitable, puede romperse */
     public static final int ICE = 2;
     
+    private final int width;
+    private final int height;
+    private final int[][] grid;
+    private final ArrayList<BaldosaCaliente> hotTiles;
+    private final ArrayList<Fogata> campfires;
+    
+    /**
+     * Crea un nuevo mapa con las dimensiones especificadas.
+     * Todas las celdas se inicializan como vacías (EMPTY).
+     */
     public Map(int width, int height){
         this.width = width;
         this.height = height;
         this.grid = new int[width][height];
         this.hotTiles = new ArrayList<>();
         this.campfires = new ArrayList<>();
-        for(int i = 0; i < width; i++){
-            for(int j = 0; j < height; j++){
-                grid[i][j] = EMPTY;
-            }
-        }
+        // El grid se inicializa automáticamente a 0 (EMPTY) en Java
     }
     
     public void addWall(Location location){

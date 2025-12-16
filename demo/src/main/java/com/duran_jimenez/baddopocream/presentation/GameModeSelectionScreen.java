@@ -1,19 +1,33 @@
 package com.duran_jimenez.baddopocream.presentation;
 
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.GridLayout;
+import java.awt.Image;
+
 import javax.imageio.ImageIO;
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 public class GameModeSelectionScreen extends JPanel {
 
     private Image backgroundImage;
     private JButton normalModeButton;
     private JButton pvpModeButton;
+    private JButton playerVsMachineButton;
     private JButton machineVsMachineButton;
     private JButton backButton;
 
     private Runnable onNormalMode;
     private Runnable onPvPMode;
+    private Runnable onPlayerVsMachine;
     private Runnable onMachineVsMachine;
     private Runnable onBack;
 
@@ -75,6 +89,9 @@ public class GameModeSelectionScreen extends JPanel {
             "Recusos nuevos\\versus jugador.png", 
             300, 150);
 
+        playerVsMachineButton = new JButton("VS IA");
+        styleCompetitiveButton(playerVsMachineButton);
+
         machineVsMachineButton = new JButton("");
         ButtonImageConfigurator.configureImageButton(machineVsMachineButton, 
             "Recusos nuevos\\versus maquina.png", 
@@ -114,6 +131,35 @@ public class GameModeSelectionScreen extends JPanel {
         });
     }
 
+    /**
+     * Estilo especial para el botón de modo competitivo
+     */
+    private void styleCompetitiveButton(JButton button){
+        button.setFont(new Font("Arial", Font.BOLD, 28));
+        button.setBackground(new Color(200, 60, 60));
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorderPainted(true);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 100, 100), 3),
+            BorderFactory.createEmptyBorder(20, 40, 20, 40)
+        ));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(300, 150));
+
+        button.addMouseListener(new java.awt.event.MouseAdapter(){
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent evt){
+                button.setBackground(new Color(220, 80, 80));
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent evt){
+                button.setBackground(new Color(200, 60, 60));
+            }
+        });
+    }
+
     private void layoutComponents(){
         JPanel headerPanel = new JPanel();
         headerPanel.setOpaque(false);
@@ -126,12 +172,13 @@ public class GameModeSelectionScreen extends JPanel {
         add(headerPanel, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel();
-        centerPanel.setLayout(new GridLayout(1, 3, 20, 20));
+        centerPanel.setLayout(new GridLayout(2, 2, 20, 20));
         centerPanel.setOpaque(false);
-        centerPanel.setBorder(BorderFactory.createEmptyBorder(40, 80, 40, 40));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(40, 80, 40, 80));
 
         centerPanel.add(normalModeButton);
         centerPanel.add(pvpModeButton);
+        centerPanel.add(playerVsMachineButton);
         centerPanel.add(machineVsMachineButton);
 
         add(centerPanel, BorderLayout.CENTER);
@@ -156,6 +203,15 @@ public class GameModeSelectionScreen extends JPanel {
     public void setPvPModeListener(Runnable action){
         this.onPvPMode = action;
         pvpModeButton.addActionListener(e -> {
+            if(action != null){
+                action.run();
+            }
+        });
+    }
+
+    public void setPlayerVsMachineListener(Runnable action){
+        this.onPlayerVsMachine = action;
+        playerVsMachineButton.addActionListener(e -> {
             if(action != null){
                 action.run();
             }

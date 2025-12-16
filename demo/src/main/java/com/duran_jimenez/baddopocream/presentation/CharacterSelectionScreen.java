@@ -1,9 +1,26 @@
 package com.duran_jimenez.baddopocream.presentation;
 
-import java.awt.*;
-import java.util.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.GridLayout;
+import java.awt.Image;
+import java.util.ArrayList;
+
 import javax.imageio.ImageIO;
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 
 public class CharacterSelectionScreen extends JPanel{
     
@@ -138,15 +155,19 @@ public class CharacterSelectionScreen extends JPanel{
 
     private void toggleCharacterSelection(String character, JButton button, Color color){
         if(selectedCharacters.contains(character)){
+            // Deseleccionar
             selectedCharacters.remove(character);
             button.setBackground(color);
             button.setBorder(BorderFactory.createLineBorder(Color.WHITE, 3));
         } else {
+            // Verificar si ya se alcanzó el máximo
             if(selectedCharacters.size() >= playersCount){
                 JOptionPane.showMessageDialog(this, "Ya has seleccionado el numero maximo de personajes.", 
                     "Seleccion Completa", JOptionPane.WARNING_MESSAGE);
                 return;
             }
+            // En modo cooperativo (2 jugadores), no permitir seleccionar el mismo personaje
+            // (El personaje solo puede estar en la lista una vez, lo cual ya está manejado)
             selectedCharacters.add(character);
             button.setBackground(color.darker());
             button.setBorder(BorderFactory.createLineBorder(Color.YELLOW, 3));

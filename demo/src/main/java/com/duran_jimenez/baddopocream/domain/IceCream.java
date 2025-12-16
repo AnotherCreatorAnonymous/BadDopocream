@@ -1,5 +1,19 @@
 package com.duran_jimenez.baddopocream.domain;
 
+/**
+ * Representa al personaje jugable (helado) en el juego.
+ * 
+ * Implementa IceBreaker para poder romper paredes de hielo
+ * e implementa Movable para el sistema de movimiento.
+ * 
+ * Atributos principales:
+ * - Nombre y color del personaje
+ * - Posición actual en el mapa
+ * - Estado de vida
+ * - Última dirección de movimiento (para animaciones y creación de hielo)
+ * 
+ * @author Durán-Jiménez
+ */
 public class IceCream implements IceBreaker, Movable {
     
     private String name;
@@ -7,8 +21,6 @@ public class IceCream implements IceBreaker, Movable {
     private Location location;
     private boolean isAlive;
     private int speed;
-    
-    // Dirección actual del jugador (para creación de hielo)
     private int lastDx = 0;
     private int lastDy = 1; // Por defecto mirando hacia abajo
 

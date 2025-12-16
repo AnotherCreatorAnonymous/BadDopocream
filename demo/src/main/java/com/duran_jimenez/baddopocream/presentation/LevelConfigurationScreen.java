@@ -465,14 +465,19 @@ public class LevelConfigurationScreen extends JPanel {
         
         switch (characterName.toLowerCase()) {
             case "fresa":
+            case "strawberry":
+            case "pink":
                 name = "Fresa";
                 color = "Pink";
                 break;
             case "vainilla":
+            case "vanilla":
+            case "cream":
                 name = "Vainilla";
                 color = "Cream";
                 break;
             case "chocolate":
+            case "brown":
                 name = "Chocolate";
                 color = "Brown";
                 break;

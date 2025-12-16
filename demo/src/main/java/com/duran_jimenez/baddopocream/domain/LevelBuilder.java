@@ -357,69 +357,43 @@ public class LevelBuilder {
     }
     
     private void addFruitsToLevel(Level level, List<Location> availablePositions) {
-        // Agregar Bananas
-        for (int i = 0; i < bananaCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addFruit(new Banana(loc));
-        }
-        
-        // Agregar Cherries
-        for (int i = 0; i < cherryCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addFruit(new Cherry(loc));
-        }
-        
-        // Agregar Grapes
-        for (int i = 0; i < grapesCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addFruit(new Grapes(loc));
-        }
-        
-        // Agregar Pineapples
-        for (int i = 0; i < pineappleCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addFruit(new Pineapple(loc));
-        }
-        
-        // Agregar Cactus
-        for (int i = 0; i < cactusCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addFruit(new Cactus(loc));
+        // Usar método genérico para cada tipo de fruta
+        addFruitsOfType(level, availablePositions, bananaCount, loc -> new Banana(loc));
+        addFruitsOfType(level, availablePositions, cherryCount, loc -> new Cherry(loc));
+        addFruitsOfType(level, availablePositions, grapesCount, loc -> new Grapes(loc));
+        addFruitsOfType(level, availablePositions, pineappleCount, loc -> new Pineapple(loc));
+        addFruitsOfType(level, availablePositions, cactusCount, loc -> new Cactus(loc));
+    }
+    
+    /**
+     * Método genérico para agregar frutas de un tipo específico
+     */
+    private void addFruitsOfType(Level level, List<Location> positions, int count, 
+                                  java.util.function.Function<Location, Fruit> fruitFactory) {
+        for (int i = 0; i < count && !positions.isEmpty(); i++) {
+            int index = random.nextInt(positions.size());
+            Location loc = positions.remove(index);
+            level.addFruit(fruitFactory.apply(loc));
         }
     }
     
     private void addEnemiesToLevel(Level level, List<Location> availablePositions) {
-        // Agregar Trolls
-        for (int i = 0; i < trollCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addEnemy(new Troll(loc));
-        }
-        
-        // Agregar Macetas
-        for (int i = 0; i < macetaCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addEnemy(new Maceta(loc));
-        }
-        
-        // Agregar Calamares
-        for (int i = 0; i < calamarCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addEnemy(new CalamarNaranja(loc));
-        }
-        
-        // Agregar Narvales
-        for (int i = 0; i < narvalCount && !availablePositions.isEmpty(); i++) {
-            int index = random.nextInt(availablePositions.size());
-            Location loc = availablePositions.remove(index);
-            level.addEnemy(new Narval(loc));
+        // Usar método genérico para cada tipo de enemigo
+        addEnemiesOfType(level, availablePositions, trollCount, loc -> new Troll(loc));
+        addEnemiesOfType(level, availablePositions, macetaCount, loc -> new Maceta(loc));
+        addEnemiesOfType(level, availablePositions, calamarCount, loc -> new CalamarNaranja(loc));
+        addEnemiesOfType(level, availablePositions, narvalCount, loc -> new Narval(loc));
+    }
+    
+    /**
+     * Método genérico para agregar enemigos de un tipo específico
+     */
+    private void addEnemiesOfType(Level level, List<Location> positions, int count,
+                                   java.util.function.Function<Location, Enemy> enemyFactory) {
+        for (int i = 0; i < count && !positions.isEmpty(); i++) {
+            int index = random.nextInt(positions.size());
+            Location loc = positions.remove(index);
+            level.addEnemy(enemyFactory.apply(loc));
         }
     }
     

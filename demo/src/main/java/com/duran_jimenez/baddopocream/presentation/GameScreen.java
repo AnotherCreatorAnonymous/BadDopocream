@@ -2,12 +2,10 @@ package com.duran_jimenez.baddopocream.presentation;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
@@ -27,12 +25,28 @@ import javax.swing.Timer;
 import com.duran_jimenez.baddopocream.domain.BadDopoCream;
 import com.duran_jimenez.baddopocream.domain.EnemyInfo;
 import com.duran_jimenez.baddopocream.domain.FruitInfo;
+import com.duran_jimenez.baddopocream.domain.HighScoreManager;
 import com.duran_jimenez.baddopocream.domain.IceCreamAI;
 import com.duran_jimenez.baddopocream.domain.ObstacleInfo;
 import com.duran_jimenez.baddopocream.domain.PlayerInfo;
 
 /**
- * Pantalla del juego - Renderiza y gestiona el juego en tiempo real
+ * Pantalla principal del juego.
+ * 
+ * Responsabilidades:
+ * - Renderizado del mapa, jugadores, frutas, enemigos y obstáculos
+ * - Gestión de controles de teclado (flechas + WASD para 2 jugadores)
+ * - Game loop y actualización del estado
+ * - Diálogos de victoria, derrota y highscores
+ * - Integración con IA para modos Machine-vs-Machine y PvsM
+ * 
+ * Modos soportados:
+ * - Single-Player: Un jugador con controles de flechas
+ * - Cooperative: Dos jugadores (flechas + WASD)
+ * - Versus (PvsM-Competitivo): Jugador vs IA
+ * - Machine-vs-Machine: IA vs IA (espectador)
+ * 
+ * @author Durán-Jiménez
  */
 public class GameScreen extends JPanel {
     
@@ -41,8 +55,9 @@ public class GameScreen extends JPanel {
     private final Runnable onRestartAction;
     private final Runnable onNextLevelAction;
     private Timer gameTimer;
-    private final String gameMode; // "Single-Player", "Cooperative", "Versus", "Machine-vs-Machine"
+    private final String gameMode; // "Single-Player", "Cooperative", "Versus", "Machine-vs-Machine", "PvsM-Competitivo"
     private final IceCreamAI aiController; // Para modo máquina vs máquina
+    private final HighScoreManager highScoreManager; // Gestor de highscores
     private String playerColor; // Color del jugador para guardado
     private JFrame parentFrame; // Frame padre para mostrar pantallas
     
@@ -65,6 +80,8 @@ public class GameScreen extends JPanel {
     private JLabel statusLabel;
     private JLabel fruitsLabel;
     private JLabel scoreLabel;
+    private JLabel player1ScoreLabel; // Puntaje jugador 1
+    private JLabel player2ScoreLabel; // Puntaje jugador 2
     private JLabel timerLabel;
     private JButton pauseButton;
     
@@ -88,7 +105,11 @@ public class GameScreen extends JPanel {
         this.onNextLevelAction = onNextLevelAction;
         this.game = game;
         this.gameMode = gameMode;
-        this.aiController = "Machine-vs-Machine".equals(gameMode) ? new com.duran_jimenez.baddopocream.domain.IceCreamAI() : null;
+        // Crear IA para modo Machine-vs-Machine o PvsM-Competitivo
+        this.aiController = ("Machine-vs-Machine".equals(gameMode) || "PvsM-Competitivo".equals(gameMode)) 
+            ? new com.duran_jimenez.baddopocream.domain.IceCreamAI() : null;
+        // Inicializar gestor de highscores
+        this.highScoreManager = new HighScoreManager();
         
         setLayout(new BorderLayout());
         setBackground(COLOR_BACKGROUND);
@@ -118,11 +139,26 @@ public class GameScreen extends JPanel {
         scoreLabel = new JLabel("⭐ 0");
         scoreLabel.setFont(new Font("Arial", Font.BOLD, 24));
         scoreLabel.setForeground(new Color(255, 223, 0)); // Dorado brillante
-        scoreLabel.setToolTipText("Puntaje");
+        scoreLabel.setToolTipText("Puntaje Total");
+        
+        // Labels para puntajes individuales (solo visibles en modo 2 jugadores)
+        player1ScoreLabel = new JLabel("🍓 P1: 0");
+        player1ScoreLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        player1ScoreLabel.setForeground(new Color(255, 150, 180)); // Rosa
+        player1ScoreLabel.setToolTipText("Puntaje Jugador 1");
+        player1ScoreLabel.setVisible(game.hasTwoPlayers());
+        
+        player2ScoreLabel = new JLabel("🍨 P2: 0");
+        player2ScoreLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        player2ScoreLabel.setForeground(new Color(150, 200, 255)); // Azul claro
+        player2ScoreLabel.setToolTipText("Puntaje Jugador 2");
+        player2ScoreLabel.setVisible(game.hasTwoPlayers());
         
         leftInfoPanel.add(statusLabel);
         leftInfoPanel.add(fruitsLabel);
         leftInfoPanel.add(scoreLabel);
+        leftInfoPanel.add(player1ScoreLabel);
+        leftInfoPanel.add(player2ScoreLabel);
         
         // Panel central: Timer con icono de reloj
         JPanel timerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
@@ -321,8 +357,8 @@ public class GameScreen extends JPanel {
         int screenX = player.x * CELL_SIZE;
         int screenY = player.y * CELL_SIZE;
         
-        // Usar color fresa por defecto (podríamos agregar color a PlayerInfo si es necesario)
-        CharacterType characterType = CharacterType.FRESA;
+        // Determinar el tipo de personaje basado en el color del jugador
+        CharacterType characterType = getCharacterTypeFromColor(player.color);
         
         int dx = player.lastDx;
         int dy = player.lastDy;
@@ -348,13 +384,47 @@ public class GameScreen extends JPanel {
         if (animation != null) {
             g.drawImage(animation, screenX, screenY, CELL_SIZE, CELL_SIZE, null);
         } else {
-            // Fallback: dibujar círculo simple
+            // Fallback: dibujar círculo simple con el color apropiado
+            Color playerFallbackColor = getPlayerFallbackColor(player.color);
             g.setColor(Color.BLACK);
             g.fillOval(screenX + 3, screenY + 3, CELL_SIZE - 6, CELL_SIZE - 6);
-            g.setColor(COLOR_PLAYER_PINK);
+            g.setColor(playerFallbackColor);
             g.fillOval(screenX + 2, screenY + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-            g.setColor(COLOR_PLAYER_PINK.brighter());
+            g.setColor(playerFallbackColor.brighter());
             g.fillOval(screenX + CELL_SIZE/3, screenY + CELL_SIZE/4, CELL_SIZE/4, CELL_SIZE/4);
+        }
+    }
+    
+    /**
+     * Convierte el color del jugador a CharacterType
+     */
+    private CharacterType getCharacterTypeFromColor(String color) {
+        if (color == null) return CharacterType.FRESA;
+        
+        String lowerColor = color.toLowerCase();
+        if (lowerColor.contains("vanilla") || lowerColor.contains("cream") || lowerColor.contains("vainilla")) {
+            return CharacterType.VAINILLA;
+        } else if (lowerColor.contains("chocolate") || lowerColor.contains("brown")) {
+            return CharacterType.CHOCOLATE;
+        } else {
+            // pink, fresa, strawberry, etc.
+            return CharacterType.FRESA;
+        }
+    }
+    
+    /**
+     * Obtiene el color de fallback para dibujar el jugador si no hay imagen
+     */
+    private Color getPlayerFallbackColor(String color) {
+        if (color == null) return COLOR_PLAYER_PINK;
+        
+        String lowerColor = color.toLowerCase();
+        if (lowerColor.contains("vanilla") || lowerColor.contains("cream") || lowerColor.contains("vainilla")) {
+            return new Color(255, 255, 200); // Crema/Vainilla
+        } else if (lowerColor.contains("chocolate") || lowerColor.contains("brown")) {
+            return new Color(139, 90, 43); // Marrón chocolate
+        } else {
+            return COLOR_PLAYER_PINK; // Rosa/Fresa
         }
     }
     
@@ -477,6 +547,18 @@ public class GameScreen extends JPanel {
         statusLabel.setText("Nivel: " + game.getCurrentLevelNumber());
         fruitsLabel.setText("Frutas: " + game.countCollectedFruits() + "/" + game.countTotalFruits());
         scoreLabel.setText("⭐ " + game.getCombinedScore());
+        
+        // Actualizar puntajes individuales si hay dos jugadores
+        if (game.hasTwoPlayers()) {
+            player1ScoreLabel.setVisible(true);
+            player2ScoreLabel.setVisible(true);
+            player1ScoreLabel.setText("🍓 P1: " + game.getPlayer1Score());
+            player2ScoreLabel.setText("🍨 P2: " + game.getPlayer2Score());
+        } else {
+            player1ScoreLabel.setVisible(false);
+            player2ScoreLabel.setVisible(false);
+        }
+        
         updateTimerDisplay();
     }
     
@@ -563,9 +645,31 @@ public class GameScreen extends JPanel {
      * Muestra diálogo de victoria total
      */
     private void showVictoryDialog(String title, String message) {
-        Object[] options = {"Jugar de Nuevo", "Menu Principal"};
+        int finalScore = game.getCombinedScore();
+        
+        // Mostrar puntajes individuales si hay dos jugadores
+        String scoreDetails = message;
+        if (game.hasTwoPlayers()) {
+            scoreDetails += "\n\n📊 Puntajes Individuales:\n" +
+                "   🍓 Jugador 1: " + game.getPlayer1Score() + " pts\n" +
+                "   🍨 Jugador 2: " + game.getPlayer2Score() + " pts";
+        }
+        
+        // Verificar si es highscore
+        if (highScoreManager.isHighScore(finalScore)) {
+            int position = highScoreManager.getPositionForScore(finalScore);
+            scoreDetails += "\n\n🎉 ¡NUEVO HIGHSCORE! (Posición #" + position + ")";
+            
+            // Pedir nombre del jugador
+            String playerName = promptForPlayerName(finalScore);
+            if (playerName != null && !playerName.trim().isEmpty()) {
+                highScoreManager.addHighScore(playerName, finalScore, gameMode, game.getCurrentLevelNumber());
+            }
+        }
+        
+        Object[] options = {"Ver Highscores", "Jugar de Nuevo", "Menu Principal"};
         int choice = JOptionPane.showOptionDialog(this,
-            message,
+            scoreDetails,
             title,
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.INFORMATION_MESSAGE,
@@ -574,14 +678,20 @@ public class GameScreen extends JPanel {
             options[0]);
         
         if (choice == 0) {
+            // Ver highscores
+            showHighScoresDialog();
+            // Después de ver highscores, volver al menú
+            if (onBackAction != null) {
+                game.resetGame();
+                onBackAction.run();
+            }
+        } else if (choice == 1) {
             // Reiniciar desde nivel 1
-            // NO llamar a game.resetToLevel(1) aquí porque onRestartAction
-            // ya se encarga de crear un nuevo juego y avanzar al nivel correcto
             if (onRestartAction != null) {
                 onRestartAction.run();
             }
         } else {
-            // Volver al menú (choice == 1 o CLOSED_OPTION)
+            // Volver al menú (choice == 2 o CLOSED_OPTION)
             if (onBackAction != null) {
                 game.resetGame();
                 onBackAction.run();
@@ -593,9 +703,31 @@ public class GameScreen extends JPanel {
      * Muestra diálogo de game over con opciones
      */
     private void showGameOverDialog(String title, String message) {
-        Object[] options = {"Reiniciar Nivel", "Menu Principal"};
+        int finalScore = game.getCombinedScore();
+        
+        // Agregar puntajes individuales si hay dos jugadores
+        String scoreDetails = message;
+        if (game.hasTwoPlayers()) {
+            scoreDetails += "\n\n📊 Puntajes Individuales:\n" +
+                "   🍓 Jugador 1: " + game.getPlayer1Score() + " pts\n" +
+                "   🍨 Jugador 2: " + game.getPlayer2Score() + " pts";
+        }
+        
+        // Verificar si califica para highscore
+        if (finalScore > 0 && highScoreManager.isHighScore(finalScore)) {
+            int position = highScoreManager.getPositionForScore(finalScore);
+            scoreDetails += "\n\n🎉 ¡Tu puntaje entra en el TOP 10! (Posición #" + position + ")";
+            
+            // Pedir nombre del jugador
+            String playerName = promptForPlayerName(finalScore);
+            if (playerName != null && !playerName.trim().isEmpty()) {
+                highScoreManager.addHighScore(playerName, finalScore, gameMode, game.getCurrentLevelNumber());
+            }
+        }
+        
+        Object[] options = {"Ver Highscores", "Reiniciar Nivel", "Menu Principal"};
         int choice = JOptionPane.showOptionDialog(this,
-            message,
+            scoreDetails,
             title,
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.ERROR_MESSAGE,
@@ -604,16 +736,118 @@ public class GameScreen extends JPanel {
             options[0]);
         
         if (choice == 0) {
+            // Ver highscores
+            showHighScoresDialog();
+            // Después de ver highscores, volver al menú
+            if (onBackAction != null) {
+                game.resetGame();
+                onBackAction.run();
+            }
+        } else if (choice == 1) {
             // Reiniciar nivel actual
             if (onRestartAction != null) {
                 onRestartAction.run();
             }
         } else {
-            // Volver al menú (choice == 1 o CLOSED_OPTION)
+            // Volver al menú (choice == 2 o CLOSED_OPTION)
             if (onBackAction != null) {
                 game.resetGame();
                 onBackAction.run();
             }
+        }
+    }
+    
+    /**
+     * Solicita el nombre del jugador para el highscore
+     */
+    private String promptForPlayerName(int score) {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JLabel messageLabel = new JLabel("<html><center>🏆 ¡Felicidades!<br>Tu puntaje de <b>" + score + "</b> puntos<br>entra en la tabla de récords!</center></html>");
+        messageLabel.setHorizontalAlignment(JLabel.CENTER);
+        messageLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        
+        javax.swing.JTextField nameField = new javax.swing.JTextField(20);
+        nameField.setFont(new Font("Arial", Font.PLAIN, 16));
+        
+        JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
+        inputPanel.add(new JLabel("Tu nombre:"), BorderLayout.WEST);
+        inputPanel.add(nameField, BorderLayout.CENTER);
+        
+        panel.add(messageLabel, BorderLayout.NORTH);
+        panel.add(inputPanel, BorderLayout.CENTER);
+        
+        int result = JOptionPane.showConfirmDialog(this, panel, 
+            "🎮 Ingresa tu Nombre", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        
+        if (result == JOptionPane.OK_OPTION) {
+            return nameField.getText().trim();
+        }
+        return null;
+    }
+    
+    /**
+     * Muestra el diálogo con la tabla de highscores
+     */
+    private void showHighScoresDialog() {
+        java.util.List<HighScoreManager.HighScoreEntry> scores = highScoreManager.getHighScores();
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><body style='font-family: Arial; padding: 10px; width: 480px;'>");
+        sb.append("<h2 style='text-align: center; color: #FFD700;'>🏆 Tabla de Récords 🏆</h2>");
+        sb.append("<table style='width: 100%; border-collapse: collapse;'>");
+        sb.append("<tr style='background-color: #2c3e50; color: white;'>");
+        sb.append("<th style='padding: 8px;'>#</th>");
+        sb.append("<th style='padding: 8px;'>Jugador</th>");
+        sb.append("<th style='padding: 8px;'>Puntaje</th>");
+        sb.append("<th style='padding: 8px;'>Modo</th>");
+        sb.append("</tr>");
+        
+        if (scores.isEmpty()) {
+            sb.append("<tr><td colspan='4' style='text-align: center; padding: 20px;'>No hay récords aún. ¡Sé el primero!</td></tr>");
+        } else {
+            int position = 1;
+            for (HighScoreManager.HighScoreEntry entry : scores) {
+                String bgColor = position % 2 == 0 ? "#ecf0f1" : "#ffffff";
+                String medal = "";
+                if (position == 1) medal = "🥇 ";
+                else if (position == 2) medal = "🥈 ";
+                else if (position == 3) medal = "🥉 ";
+                
+                sb.append("<tr style='background-color: ").append(bgColor).append(";'>");
+                sb.append("<td style='padding: 8px; text-align: center;'>").append(medal).append(position).append("</td>");
+                sb.append("<td style='padding: 8px;'>").append(entry.getPlayerName()).append("</td>");
+                sb.append("<td style='padding: 8px; text-align: right; font-weight: bold;'>").append(entry.getScore()).append("</td>");
+                sb.append("<td style='padding: 8px;'>").append(formatGameMode(entry.getGameMode())).append("</td>");
+                sb.append("</tr>");
+                position++;
+            }
+        }
+        
+        sb.append("</table></body></html>");
+        
+        JLabel label = new JLabel(sb.toString());
+        label.setVerticalAlignment(JLabel.TOP);
+        
+        javax.swing.JScrollPane scrollPane = new javax.swing.JScrollPane(label);
+        scrollPane.setPreferredSize(new Dimension(550, 500));
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        
+        JOptionPane.showMessageDialog(this, scrollPane, "Highscores", JOptionPane.PLAIN_MESSAGE);
+    }
+    
+    /**
+     * Formatea el nombre del modo de juego para mostrar
+     */
+    private String formatGameMode(String mode) {
+        if (mode == null) return "Normal";
+        switch (mode) {
+            case "PvP-Cooperativo": return "Cooperativo";
+            case "PvsM-Competitivo": return "vs IA";
+            case "Machine-vs-Machine": return "IA vs IA";
+            default: return mode;
         }
     }
     
@@ -673,8 +907,9 @@ public class GameScreen extends JPanel {
                         break;
                 }
                 
-                // Controles del Jugador 2 (WASD y SHIFT) - Solo en modo cooperativo
-                if(game.hasTwoPlayers()){
+                // Controles del Jugador 2 (WASD y SHIFT) - Solo en modo cooperativo (no en competitivo)
+                // En modo PvsM-Competitivo, la IA controla al jugador 2
+                if(game.hasTwoPlayers() && !"PvsM-Competitivo".equals(gameMode)){
                     switch (e.getKeyCode()) {
                         case KeyEvent.VK_W:
                             if (currentTime - lastMoveTimePlayer2 >= MOVE_DELAY) {
@@ -818,7 +1053,7 @@ public class GameScreen extends JPanel {
      */
     private void startGameLoop() {
         gameTimer = new Timer(500, e -> { // 500ms = movimiento más lento y controlable
-            // Si es modo máquina vs máquina, ejecutar IA
+            // Si es modo máquina vs máquina, la IA controla al jugador 1
             if("Machine-vs-Machine".equals(gameMode) && aiController != null && !game.isGameOver()){
                 PlayerInfo player = game.getPlayer1Info();
                 if(player != null){
@@ -829,6 +1064,28 @@ public class GameScreen extends JPanel {
                     // Aplicar movimiento
                     if(move[0] != 0 || move[1] != 0){
                         game.movePlayer1(move[0], move[1]);
+                    }
+                }
+            }
+            
+            // Si es modo competitivo (PvsM), la IA controla al jugador 2
+            if("PvsM-Competitivo".equals(gameMode) && aiController != null && !game.isGameOver()){
+                com.duran_jimenez.baddopocream.domain.Level level = game.getCurrentLevel();
+                if(level != null && level.hasTwoPlayers()){
+                    com.duran_jimenez.baddopocream.domain.IceCream aiPlayer = level.getPlayer2();
+                    if(aiPlayer != null && aiPlayer.isAlive()){
+                        // Usar la IA para decidir el movimiento
+                        int[] move = aiController.decideMove(level, aiPlayer);
+                        
+                        // Aplicar movimiento al jugador 2
+                        if(move[0] != 0 || move[1] != 0){
+                            game.movePlayer2(move[0], move[1]);
+                        }
+                        
+                        // Si la IA decide usar hielo
+                        if(move.length > 2 && move[2] == 1){
+                            game.createIceLinePlayer2(move[0], move[1]);
+                        }
                     }
                 }
             }

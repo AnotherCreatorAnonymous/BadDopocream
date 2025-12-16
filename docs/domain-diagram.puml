@@ -3,14 +3,37 @@
 ' ============================================
 ' DIAGRAMA DE CLASES DEL DOMINIO
 ' Bad Dopo Cream - DOPO 2025
+' Última actualización: Diciembre 2025
 ' ============================================
 
 skinparam classAttributeIconSize 0
 skinparam backgroundColor #FEFEFE
 skinparam class {
     BackgroundColor<<abstract>> LightYellow
+    BackgroundColor<<interface>> LightCyan
+    BackgroundColor<<enum>> LightPink
     BorderColor Black
     ArrowColor Black
+}
+
+' ============================================
+' INTERFACES
+' ============================================
+
+interface IceBreaker <<interface>> {
+    + breakIce(level: Level, x: int, y: int): void
+}
+
+interface Movable <<interface>> {
+    + setMap(map: Map): void
+    + getLocation(): Location
+    + setLocation(location: Location): void
+    + tryMove(dx: int, dy: int, map: Map): boolean
+}
+
+interface FruitCounter <<interface>> {
+    + countCollectedFruits(): int
+    + countTotalFruits(): int
 }
 
 ' ============================================
@@ -23,17 +46,29 @@ class BadDopoCream {
     - currentLevel: Level
     - totalScore: int
     - gameWon: boolean
+    - player1Score: int
+    - player2Score: int
     + BadDopoCream()
     + startGame(): void
     + nextLevel(): void
     + getCurrentLevel(): Level
     + getCurrentLevelNumber(): int
     + getTotalScore(): int
+    + getPlayer1Score(): int
+    + getPlayer2Score(): int
+    + addPlayer1Score(points: int): void
+    + addPlayer2Score(points: int): void
     + isGameWon(): boolean
     + isGameOver(): boolean
+    + isPaused(): boolean
+    + pause(): void
+    + resume(): void
     + resetToLevel(levelNumber: int): void
     + restoreFromState(state: GameState): void
-    + setTotalScore(score: int): void
+    + saveGame(playerColor: String, gameMode: String, saveName: String): boolean
+    + {static} loadGame(saveName: String): GameState
+    + {static} listSavedGames(): List<String>
+    + {static} deleteSavedGame(saveName: String): boolean
 }
 
 ' ============================================
@@ -47,26 +82,41 @@ class Level {
     - player2: IceCream
     - fruits: ArrayList<Fruit>
     - enemies: ArrayList<Enemy>
+    - waves: ArrayList<FruitWave>
     - isCompleted: boolean
     - currentScore: int
     - levelStartTime: long
     - pausedTime: long
+    - lastPauseStart: long
     - isPaused: boolean
     - timeExpired: boolean
-    {static} - LEVEL_TIME_LIMIT: long
+    - useWaveSystem: boolean
+    {static} - LEVEL_TIME_LIMIT: long = 180000
     + Level(levelNumber: int, width: int, height: int)
     + movePlayer(dx: int, dy: int): boolean
     + movePlayer2(dx: int, dy: int): boolean
     + moveEnemies(): void
     + moveFruits(): void
     + createIceLine(dx: int, dy: int): void
+    + createIceLineForPlayer2(dx: int, dy: int): void
     + breakIceWall(location: Location): void
+    + createIceLineFromPlayer(player: IceCream, dx: int, dy: int): void
+    + breakIceLineFromPosition(startX: int, startY: int, dx: int, dy: int): void
+    + hasEnemyAt(location: Location): boolean
+    + isPlayerAt(location: Location): boolean
     + isCompleted(): boolean
     + isGameOver(): boolean
     + getRemainingTime(): long
     + pause(): void
     + resume(): void
-    + getIceWallAt(location: Location): IceWall
+    + isPaused(): boolean
+    + getClosestPlayerLocation(enemyLocation: Location): Location
+    + addWave(wave: FruitWave): void
+    + enableWaveSystem(): void
+    + getPlayerInfo(playerNum: int): PlayerInfo
+    + getEnemyInfo(): List<EnemyInfo>
+    + getFruitInfo(): List<FruitInfo>
+    + getObstacleInfo(): List<ObstacleInfo>
 }
 
 class Map {
@@ -81,13 +131,21 @@ class Map {
     + hasWall(location: Location): boolean
     + hasIceWall(location: Location): boolean
     + isHotTile(location: Location): boolean
+    + isCampfireAt(location: Location): boolean
     + addWall(location: Location): void
     + addIceWall(location: Location): void
+    + addIceWall(iceWall: IceWall): void
     + removeIceWall(location: Location): void
     + addHotTile(hotTile: BaldosaCaliente): void
     + addCampfire(campfire: Fogata): void
     + getCampfireAt(location: Location): Fogata
     + getIceWallAt(location: Location): IceWall
+    + getIceWalls(): List<IceWall>
+    + getHotTiles(): List<BaldosaCaliente>
+    + getCampfires(): List<Fogata>
+    + getWidth(): int
+    + getHeight(): int
+    + getRandomEmptyLocation(): Location
 }
 
 class Location {
@@ -98,58 +156,92 @@ class Location {
     + getY(): int
     + move(dx: int, dy: int): Location
     + distanceTo(other: Location): double
+    + manhattanDistanceTo(other: Location): int
+    + isAdjacent(other: Location): boolean
     + equals(obj: Object): boolean
+    + hashCode(): int
+    + toString(): String
 }
 
 ' ============================================
-' JUGADOR
+' JUGADOR Y AI
 ' ============================================
 
 class IceCream {
     - location: Location
     - character: String
     - alive: boolean
+    - lastDx: int
+    - lastDy: int
+    - map: Map
     + IceCream(location: Location, character: String)
     + move(dx: int, dy: int): void
     + getLocation(): Location
     + setLocation(location: Location): void
     + isAlive(): boolean
     + die(): void
+    + revive(): void
     + getCharacter(): String
+    + getLastDx(): int
+    + getLastDy(): int
+    + setMap(map: Map): void
+    + tryMove(dx: int, dy: int, map: Map): boolean
+    + breakIce(level: Level, x: int, y: int): void
 }
 
 class IceCreamAI {
-    - game: BadDopoCream
-    - level: Level
-    - player: IceCream
     - profile: AIProfile
-    {static} - ENEMY_DETECTION_RANGE: double
-    {static} - ENEMY_DANGER_RANGE: double
-    {static} - FEARFUL_SAFE_DISTANCE: double
+    - random: Random
+    {static} - ENEMY_DETECTION_RANGE: double = 4.0
+    {static} - ENEMY_DANGER_RANGE: double = 3.0
+    {static} - FEARFUL_SAFE_DISTANCE: double = 6.0
     + IceCreamAI()
     + IceCreamAI(profile: AIProfile)
-    + decideMove(): String
-    - decideHungryMove(): String
-    - decideFearfulMove(): String
-    - decideExpertMove(): String
-    - findNearestFruit(): Fruit
-    - findSafestFruit(): Fruit
-    - findOptimalFruit(): Fruit
-    - isSafeFromEnemies(location: Location): boolean
-    - canBlockEnemyWithIce(): boolean
+    + decideMove(level: Level, player: IceCream): int[]
+    - decideHungryMove(level: Level, player: IceCream): int[]
+    - decideFearfulMove(level: Level, player: IceCream): int[]
+    - decideExpertMove(level: Level, player: IceCream): int[]
+    - findNearestFruit(level: Level, player: IceCream): Fruit
+    - findSafestFruit(level: Level, player: IceCream): Fruit
+    - isSafeFromEnemies(level: Level, location: Location): boolean
+    - getMoveTowardsTarget(player: IceCream, target: Location, level: Level): int[]
+    - getSafestMove(level: Level, player: IceCream): int[]
+    - getEnemyDangerLevel(level: Level, location: Location): double
 }
 
-enum AIProfile {
+enum AIProfile <<enum>> {
     HUNGRY
     FEARFUL
     EXPERT
 }
 
 ' ============================================
+' UTILIDADES AI
+' ============================================
+
+class PathFinder {
+    {static} + findPath(start: Location, end: Location, map: Map): List<Location>
+    {static} + getNextMove(start: Location, end: Location, map: Map): int[]
+    {static} - reconstructPath(cameFrom: Map, current: Location): List<Location>
+    {static} - heuristic(a: Location, b: Location): double
+}
+
+class EnemyAI {
+    - profile: AIProfile
+    - random: Random
+    + EnemyAI()
+    + EnemyAI(profile: AIProfile)
+    + decideMove(level: Level, enemy: Enemy): int[]
+    - decideHungryMove(level: Level, enemy: Enemy): int[]
+    - decideCowardMove(level: Level, enemy: Enemy): int[]
+    - decideExpertMove(level: Level, enemy: Enemy): int[]
+}
+
+' ============================================
 ' FRUTAS (JERARQUÍA)
 ' ============================================
 
-abstract class Fruit {
+abstract class Fruit <<abstract>> {
     # name: String
     # points: int
     # location: Location
@@ -159,108 +251,162 @@ abstract class Fruit {
     + collect(): int
     + isCollected(): boolean
     + getLocation(): Location
+    + setLocation(location: Location): void
     + getName(): String
+    + getPoints(): int
     + move(): void
     + update(): void
     + canMove(): boolean
+    + getTypeName(): String
     + pushByPlayer(dx: int, dy: int, playerLocation: Location): void
+    + hasSpikes(): boolean
     + shouldKillPlayer(playerLocation: Location): boolean
     + requiresMapReference(): boolean
 }
 
+class Grapes {
+    {static} - GRAPES_POINTS: int = 50
+    + Grapes(location: Location)
+    + collect(): int
+    + getTypeName(): String
+}
+
 class Banana {
-    {static} - BANANA_POINTS: int = 50
+    {static} - BANANA_POINTS: int = 100
     + Banana(location: Location)
+    + collect(): int
+    + getTypeName(): String
 }
 
 class Cherry {
-    {static} - CHERRY_POINTS: int = 100
+    {static} - CHERRY_POINTS: int = 150
+    {static} - TELEPORT_INTERVAL: long = 20000
     - map: Map
-    - moveTimer: int
-    - moveInterval: int
+    - lastTeleportTime: long
     + Cherry(location: Location)
     + setMap(map: Map): void
     + update(): void
-    - findRandomValidMove(): Location
-}
-
-class Grapes {
-    {static} - GRAPES_POINTS: int = 150
-    + Grapes(location: Location)
+    - teleport(): void
+    + getTypeName(): String
+    + requiresMapReference(): boolean
 }
 
 class Pineapple {
     {static} - PINEAPPLE_POINTS: int = 200
     - map: Map
+    - random: Random
+    - currentDx: int
+    - currentDy: int
     + Pineapple(location: Location)
     + setMap(map: Map): void
+    + collect(): int
+    + move(): void
+    - chooseRandomDirection(): void
     + pushByPlayer(dx: int, dy: int, playerLocation: Location): void
+    + getTypeName(): String
+    + requiresMapReference(): boolean
+    + tryMove(dx: int, dy: int, map: Map): boolean
 }
 
 class Cactus {
-    {static} - CACTUS_POINTS: int = 300
-    {static} - SPIKE_DAMAGE_RANGE: double = 1.5
+    {static} - CACTUS_POINTS: int = 250
+    {static} - SPIKE_INTERVAL: long = 30000
     - hasSpikes: boolean
-    - spikeTimer: int
-    - spikeInterval: int
+    - lastSpikeToggle: long
     + Cactus(location: Location)
+    + collect(): int
     + update(): void
-    + shouldKillPlayer(playerLocation: Location): boolean
     + hasSpikes(): boolean
+    + shouldKillPlayer(playerLocation: Location): boolean
+    + getSecondsUntilSpikeToggle(): int
+    + getTypeName(): String
+}
+
+class FruitWave {
+    - fruitType: String
+    - points: int
+    - fruits: List<Fruit>
+    - activated: boolean
+    + FruitWave(fruitType: String, points: int)
+    + addFruit(fruit: Fruit): void
+    + getFruits(): List<Fruit>
+    + isActivated(): boolean
+    + activate(): void
+    + getFruitType(): String
+    + getPoints(): int
 }
 
 ' ============================================
 ' ENEMIGOS (JERARQUÍA)
 ' ============================================
 
-abstract class Enemy {
+abstract class Enemy <<abstract>> {
     # location: Location
     # name: String
+    # map: Map
+    # lastDx: int
+    # lastDy: int
     + Enemy(location: Location, name: String)
     + getLocation(): Location
     + setLocation(location: Location): void
     + getName(): String
+    + getLastDx(): int
+    + getLastDy(): int
+    + setMap(map: Map): void
     + collidesWithPlayer(playerLocation: Location): boolean
     + tryMove(playerLocation: Location, map: Map): void
     {abstract} + move(playerLocation: Location, map: Map): void
 }
 
-class Maceta {
-    - dx: int
-    - dy: int
-    + Maceta(location: Location)
-    + move(playerLocation: Location, map: Map): void
-}
-
 class Troll {
     - dx: int
     - dy: int
-    {static} - TROLL_DETECTION_RANGE: double = 5.0
     + Troll(location: Location)
     + move(playerLocation: Location, map: Map): void
-    + changeDirectionOnEnemyCollision(map: Map): void
+    - reverseDirection(): void
+}
+
+class Maceta {
+    + Maceta(location: Location)
+    + move(playerLocation: Location, map: Map): void
+    - moveTowardsPlayer(playerLocation: Location, map: Map): void
+}
+
+abstract class Calamar <<abstract>> {
+    + Calamar(location: Location)
+    + breakIce(level: Level, x: int, y: int): void
 }
 
 class CalamarNaranja {
-    - dx: int
-    - dy: int
-    - chaseMode: boolean
-    {static} - DETECTION_RANGE: double = 6.0
+    {static} - DETECTION_RANGE: double = 8.0
+    - breakingIce: boolean
+    - breakStartTime: long
+    {static} - ICE_BREAK_DELAY: long = 500
     + CalamarNaranja(location: Location)
     + move(playerLocation: Location, map: Map): void
-    - chasePlayer(playerLocation: Location, map: Map): void
-    - findAlternativePath(targetX: int, targetY: int, map: Map): void
-    + changeDirectionRandomly(): void
-}
-
-class Calamar {
-    + Calamar(location: Location)
-    + move(playerLocation: Location, map: Map): void
+    - chasePlayer(playerLocation: Location, map: Map, level: Level): void
+    + isBreakingIce(): boolean
 }
 
 class Narval {
+    - state: NarvalState
+    - chargeDirectionX: int
+    - chargeDirectionY: int
+    - detectionRange: int
+    - chargeSpeed: int
     + Narval(location: Location)
     + move(playerLocation: Location, map: Map): void
+    - patrol(map: Map): void
+    - checkForChargeOpportunity(playerLocation: Location): void
+    - charge(map: Map): void
+    + isCharging(): boolean
+    + breakIce(level: Level, x: int, y: int): void
+}
+
+enum NarvalState <<enum>> {
+    PATROLLING
+    CHARGING
+    BREAKING_ICE
 }
 
 ' ============================================
@@ -279,10 +425,8 @@ class IceWall {
 
 class BaldosaCaliente {
     - location: Location
-    - active: boolean
     + BaldosaCaliente(location: Location)
     + getLocation(): Location
-    + isActive(): boolean
     + shouldMeltIce(iceLocation: Location): boolean
 }
 
@@ -304,65 +448,154 @@ class Fogata {
 ' ============================================
 
 class LevelBuilder {
-    {static} + buildLevel(levelNumber: int, config: LevelConfigurator): Level
-    {static} - addObstacles(level: Level, map: Map, config: LevelConfigurator): void
-    {static} - addFruits(level: Level, map: Map, config: LevelConfigurator): void
-    {static} - addEnemies(level: Level, map: Map, config: LevelConfigurator): void
-    {static} - getRandomEmptyLocation(map: Map, occupiedLocations: ArrayList<Location>): Location
-}
-
-class LevelConfigurator {
     - levelNumber: int
-    - mapWidth: int
-    - mapHeight: int
+    - width: int
+    - height: int
+    - player1: IceCream
+    - player2: IceCream
+    - numGrapes: int
     - numBananas: int
     - numCherries: int
-    - numGrapes: int
     - numPineapples: int
     - numCactus: int
-    - numWalls: int
-    - numHotTiles: int
-    - numCampfires: int
     - numMacetas: int
     - numTrolls: int
     - numCalamares: int
-    - playerStartX: int
-    - playerStartY: int
-    + LevelConfigurator(levelNumber: int)
-    + {static} getDefaultConfiguration(levelNumber: int): LevelConfigurator
-    + setMapSize(width: int, height: int): LevelConfigurator
-    + setFruits(bananas: int, cherries: int, grapes: int, pineapples: int, cactus: int): LevelConfigurator
-    + setObstacles(walls: int, hotTiles: int, campfires: int): LevelConfigurator
-    + setEnemies(macetas: int, trolls: int, calamares: int): LevelConfigurator
+    - numNarvales: int
+    - numIceWalls: int
+    - numCampfires: int
+    - numHotTiles: int
+    - useWaves: boolean
+    + LevelBuilder(levelNumber: int)
+    + setMapSize(width: int, height: int): LevelBuilder
+    + setPlayer1(player: IceCream): LevelBuilder
+    + setPlayer2(player: IceCream): LevelBuilder
+    + setGrapes(count: int): LevelBuilder
+    + setBananas(count: int): LevelBuilder
+    + setCherries(count: int): LevelBuilder
+    + setPineapples(count: int): LevelBuilder
+    + setCactus(count: int): LevelBuilder
+    + setMacetas(count: int): LevelBuilder
+    + setTrolls(count: int): LevelBuilder
+    + setCalamares(count: int): LevelBuilder
+    + setNarvales(count: int): LevelBuilder
+    + setIceWalls(count: int): LevelBuilder
+    + setCampfires(count: int): LevelBuilder
+    + setHotTiles(count: int): LevelBuilder
+    + enableWaveSystem(): LevelBuilder
+    + build(): Level
+    - addFruitsOfType(level: Level, positions: List<Location>, count: int, creator: Function<Location, Fruit>): void
+    - addEnemiesOfType(level: Level, positions: List<Location>, count: int, creator: Function<Location, Enemy>): void
+}
+
+class LevelConfigurator {
+    + {static} createLevel(levelNumber: int, player: IceCream): Level
+    + {static} createLevel(levelNumber: int, player1: IceCream, player2: IceCream): Level
+    + {static} createDefaultLevel1(player: IceCream): Level
+    + {static} createDefaultLevel2(player: IceCream): Level
+    + {static} createDefaultLevel3(player: IceCream): Level
 }
 
 ' ============================================
-' UTILIDADES
+' DTOs / INFO CLASSES
 ' ============================================
 
-interface FruitCounter {
-    + countCollectedFruits(): int
-    + countTotalFruits(): int
+class PlayerInfo {
+    + x: int
+    + y: int
+    + character: String
+    + isAlive: boolean
+    + lastDx: int
+    + lastDy: int
+    + name: String
+    + color: String
+    + PlayerInfo(x: int, y: int, character: String, isAlive: boolean, lastDx: int, lastDy: int, name: String, color: String)
 }
+
+class FruitInfo {
+    + x: int
+    + y: int
+    + typeName: String
+    + name: String
+    + isCollected: boolean
+    + hasSpikes: boolean
+    + secondsUntilSpike: int
+    + FruitInfo(x: int, y: int, typeName: String, name: String, isCollected: boolean, hasSpikes: boolean, secondsUntilSpike: int)
+}
+
+class EnemyInfo {
+    + x: int
+    + y: int
+    + typeName: String
+    + lastDx: int
+    + lastDy: int
+    + isCharging: boolean
+    + isBreakingIce: boolean
+    + EnemyInfo(x: int, y: int, typeName: String, lastDx: int, lastDy: int, isCharging: boolean, isBreakingIce: boolean)
+}
+
+class ObstacleInfo {
+    + x: int
+    + y: int
+    + type: String
+    + isActive: boolean
+    + ObstacleInfo(x: int, y: int, type: String, isActive: boolean)
+}
+
+' ============================================
+' PERSISTENCIA
+' ============================================
 
 class GameState {
-    - currentLevelIndex: int
+    - saveName: String
+    - playerColor: String
+    - gameMode: String
+    - levelNumber: int
     - totalScore: int
-    - levelScore: int
-    - collectedFruits: int
-    - remainingTime: long
-    - playerLocation: SerializableLocation
-    - player2Location: SerializableLocation
-    - fruits: List<SerializableFruit>
-    - enemies: List<SerializableEnemy>
+    - player1Score: int
+    - player2Score: int
     - timestamp: long
-    + GameState(game: BadDopoCream)
-    + toJson(): String
-    + {static} fromJson(json: String): GameState
+    + GameState()
+    + getSaveName(): String
+    + getPlayerColor(): String
+    + getGameMode(): String
+    + getLevelNumber(): int
+    + getTotalScore(): int
+    + getPlayer1Score(): int
+    + getPlayer2Score(): int
+    + getTimestamp(): long
+    + setSaveName(name: String): void
+    + setPlayerColor(color: String): void
+    + setGameMode(mode: String): void
+    + setLevelNumber(level: int): void
+    + setTotalScore(score: int): void
 }
 
-class IceBreaker {
-    {static} + breakIceInDirection(level: Level, dx: int, dy: int): void
+class HighScoreManager {
+    {static} - HIGHSCORES_FILE: String
+    {static} - MAX_HIGHSCORES: int = 10
+    - highScores: List<HighScoreEntry>
+    + HighScoreManager()
+    + addHighScore(name: String, score: int, gameMode: String, level: int): void
+    + getHighScores(): List<HighScoreEntry>
+    + isHighScore(score: int): boolean
+    + getPositionForScore(score: int): int
+    - loadHighScores(): void
+    - saveHighScores(): void
+}
+
+class HighScoreEntry {
+    - name: String
+    - score: int
+    - gameMode: String
+    - level: int
+    - timestamp: long
+    + HighScoreEntry(name: String, score: int, gameMode: String, level: int)
+    + getName(): String
+    + getScore(): int
+    + getGameMode(): String
+    + getLevel(): int
+    + getTimestamp(): String
 }
 
 ' ============================================
@@ -370,164 +603,135 @@ class IceBreaker {
 ' ============================================
 
 class BadDopoCream_Exceptions {
-    {static} + class GameInitializationException
-    {static} + class LevelLoadException
-    {static} + class InvalidLevelNumberException
-    {static} + class MapSizeException
-    {static} + class PlayerInitializationException
-    {static} + class FruitCreationException
-    {static} + class EnemyCreationException
-    {static} + class InvalidPositionException
-    {static} + class CollisionDetectionException
-    {static} + class GameStateException
-    {static} + class SaveGameException
-    {static} + class LoadGameException
-    {static} + class FileOperationException
-    {static} + class JsonParseException
-    {static} + class ConfigurationException
-    {static} + class AIException
-    {static} + class TimerException
-    {static} + class ImageLoadException
-    {static} + class UIComponentInitializationException
-    {static} + class InvalidInputException
-    {static} + class GameLogicException
+    + {static} class InvalidMoveException
+    + {static} class LevelNotLoadedException
+    + {static} class GameOverException
+    + {static} class SaveLoadException
+    + {static} class InvalidConfigurationException
 }
+
+' ============================================
+' RELACIONES DE IMPLEMENTACIÓN
+' ============================================
+
+IceCream ..|> IceBreaker
+IceCream ..|> Movable
+Pineapple ..|> Movable
+Enemy ..|> Movable
+Calamar ..|> IceBreaker
+Narval ..|> IceBreaker
+BadDopoCream ..|> FruitCounter
 
 ' ============================================
 ' RELACIONES DE COMPOSICIÓN
 ' ============================================
 
 BadDopoCream "1" *-- "1..*" Level : contiene
-BadDopoCream ..|> FruitCounter : implementa
-
 Level "1" *-- "1" Map : contiene
 Level "1" *-- "1..2" IceCream : jugadores
 Level "1" *-- "0..*" Fruit : frutas
 Level "1" *-- "0..*" Enemy : enemigos
+Level "1" *-- "0..*" FruitWave : oleadas
 
 Map "1" *-- "0..*" IceWall : hielos
 Map "1" *-- "0..*" BaldosaCaliente : baldosas
 Map "1" *-- "0..*" Fogata : fogatas
 Map "1" o-- "0..*" Location : paredes
 
-IceCream "1" o-- "1" Location : posición
-IceCreamAI "1" o-- "1" BadDopoCream : controla
-IceCreamAI "1" -- "1" AIProfile : usa perfil
+HighScoreManager "1" *-- "0..*" HighScoreEntry : entradas
 
 ' ============================================
 ' RELACIONES DE HERENCIA - FRUTAS
 ' ============================================
 
+Fruit <|-- Grapes
 Fruit <|-- Banana
 Fruit <|-- Cherry
-Fruit <|-- Grapes
 Fruit <|-- Pineapple
 Fruit <|-- Cactus
-
-Fruit "1" o-- "1" Location : posición
-Cherry "1" o-- "0..1" Map : referencia
-Pineapple "1" o-- "0..1" Map : referencia
 
 ' ============================================
 ' RELACIONES DE HERENCIA - ENEMIGOS
 ' ============================================
 
-Enemy <|-- Maceta
 Enemy <|-- Troll
-Enemy <|-- CalamarNaranja
+Enemy <|-- Maceta
 Enemy <|-- Calamar
+Calamar <|-- CalamarNaranja
 Enemy <|-- Narval
 
+' ============================================
+' RELACIONES DE ASOCIACIÓN
+' ============================================
+
+IceCreamAI "1" -- "1" AIProfile : usa
+EnemyAI "1" -- "1" AIProfile : usa
+Narval "1" -- "1" NarvalState : estado
+
+IceCream "1" o-- "1" Location : posición
+Fruit "1" o-- "1" Location : posición
 Enemy "1" o-- "1" Location : posición
-
-' ============================================
-' RELACIONES DE OBSTÁCULOS
-' ============================================
-
 IceWall "1" o-- "1" Location : posición
 BaldosaCaliente "1" o-- "1" Location : posición
 Fogata "1" o-- "1" Location : posición
 
+Cherry "1" o-- "0..1" Map : referencia
+Pineapple "1" o-- "0..1" Map : referencia
+
 ' ============================================
-' RELACIONES DE CONSTRUCCIÓN
+' RELACIONES DE USO
 ' ============================================
 
 LevelBuilder ..> Level : construye
-LevelBuilder ..> LevelConfigurator : usa
-LevelBuilder ..> Map : configura
 LevelBuilder ..> Fruit : crea
 LevelBuilder ..> Enemy : crea
-
-LevelConfigurator ..> Level : configura
-
-' ============================================
-' RELACIONES DE UTILIDADES
-' ============================================
-
-GameState ..> BadDopoCream : guarda estado
-IceBreaker ..> Level : modifica hielo
+LevelConfigurator ..> LevelBuilder : usa
+PathFinder ..> Map : navega
+GameState ..> BadDopoCream : guarda/restaura
 
 ' ============================================
 ' NOTAS
 ' ============================================
 
 note top of BadDopoCream
-  Clase principal del juego
-  Gestiona niveles y puntaje total
+  **Fachada principal del juego**
+  - Gestiona niveles y puntaje
+  - Soporta 1 o 2 jugadores
+  - Persistencia de partidas
 end note
 
 note top of Level
-  Representa un nivel del juego
-  Gestiona jugadores, frutas, enemigos
-  Control de timer (3 minutos)
+  **Representa un nivel del juego**
+  - Timer de 3 minutos
+  - Sistema de oleadas de frutas
+  - Soporte multiplayer
 end note
 
-note top of Map
-  Representa el mapa del nivel
-  Gestiona paredes, hielo y obstáculos
-end note
-
-note top of IceCreamAI
-  Inteligencia artificial del jugador
-  Tres perfiles: Hungry, Fearful, Expert
-  Pathfinding y evasión de enemigos
+note right of IceCreamAI
+  **IA del helado (jugador máquina)**
+  - Hungry: busca frutas
+  - Fearful: evita enemigos
+  - Expert: balance óptimo
 end note
 
 note bottom of Fruit
-  Clase base abstracta para frutas
-  Polimorfismo para comportamientos especiales
+  **Jerarquía de frutas**
+  Puntos: Grapes(50) < Banana(100)
+  < Cherry(150) < Pineapple(200)
+  < Cactus(250)
 end note
 
-note bottom of Enemy
-  Clase base abstracta para enemigos
-  Cada tipo tiene movimiento único
+note right of Narval
+  **Comportamiento de embestida**
+  - Patrulla normalmente
+  - Embiste al alinearse con jugador
+  - Destruye hielo en su camino
 end note
 
 note right of Fogata
-  Se apaga 10s al romper hielo sobre ella
-  Mata al jugador al contacto
-end note
-
-note right of BaldosaCaliente
-  Derrite hielo instantáneamente
-  Siempre activa
-end note
-
-note left of Cactus
-  Tiene pinchos periódicos
-  Mata al jugador si tiene pinchos
-  300 puntos si se recolecta sin pinchos
-end note
-
-note left of Pineapple
-  Única fruta empujable
-  Se mueve con el jugador
-  Vale 200 puntos
-end note
-
-note left of Cherry
-  Se mueve aleatoriamente
-  Requiere referencia al mapa
+  **Se apaga temporalmente**
+  - Crear hielo sobre ella y romperlo
+  - Se reenciende en 10 segundos
 end note
 
 @enduml

@@ -2,28 +2,46 @@ package com.duran_jimenez.baddopocream.domain;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Representa un nivel del juego Bad Dopo Cream.
+ * 
+ * Contiene toda la lógica de un nivel individual:
+ * - Mapa con paredes, hielo y obstáculos
+ * - Jugador(es), frutas y enemigos
+ * - Sistema de puntuación y timer
+ * - Mecánicas de hielo (crear/romper)
+ * - Detección de colisiones
+ * - Sistema de oleadas de frutas (opcional)
+ * 
+ * Soporta modo un jugador y dos jugadores (cooperativo/competitivo)
+ * 
+ * @author Durán-Jiménez
+ * @version 2.0
+ */
 public class Level {
 
     private int levelNumber;
     private Map map;
     private IceCream player;
-    private IceCream player2; // Segundo jugador para modo cooperativo
+    private IceCream player2;
     private ArrayList<Fruit> fruits;
     private ArrayList<Enemy> enemies;
     private boolean isCompleted;
     private int totalFruits;
     private int collectedFruits;
-    private int currentScore; // Puntaje del nivel actual
+    private int currentScore;
+    private int player1Score;
+    private int player2Score;
     
-    // Sistema de oleadas de frutas
+    // Sistema de oleadas
     private List<FruitWave> fruitWaves;
     private int currentWaveIndex;
-    private boolean useWaveSystem; // Flag para usar o no el sistema de oleadas
+    private boolean useWaveSystem;
     
-    // Sistema de timer
-    private static final long LEVEL_TIME_LIMIT = 180000; // 3 minutos en milisegundos
+    // Timer del nivel
+    private static final long LEVEL_TIME_LIMIT = 180000; // 3 minutos
     private long levelStartTime;
-    private long pausedTime; // Tiempo acumulado en pausa
+    private long pausedTime;
     private long lastPauseStart;
     private boolean isPaused;
     private boolean timeExpired;
@@ -37,6 +55,8 @@ public class Level {
         this.collectedFruits = 0;
         this.totalFruits = 0;
         this.currentScore = 0;
+        this.player1Score = 0;
+        this.player2Score = 0;
         this.player2 = null; // Inicialmente sin segundo jugador
         
         // Inicializar sistema de oleadas
@@ -248,6 +268,8 @@ public class Level {
     }
 
     public boolean movePlayer(int dx, int dy){
+        if(player == null || !player.isAlive()) return false;
+        
         Location currentLocation = player.getLocation();
         Location newLocation = currentLocation.move(dx, dy);
 
@@ -257,7 +279,7 @@ public class Level {
         
         player.move(dx, dy);
         
-        checkFruitCollection(newLocation);
+        checkFruitCollection(newLocation, 1); // Jugador 1 recolecta
 
         checkEnemyCollisions();
         
@@ -269,7 +291,7 @@ public class Level {
     }
     
     public boolean movePlayer2(int dx, int dy){
-        if(player2 == null) return false;
+        if(player2 == null || !player2.isAlive()) return false;
         
         Location currentLocation = player2.getLocation();
         Location newLocation = currentLocation.move(dx, dy);
@@ -280,7 +302,7 @@ public class Level {
         
         player2.move(dx, dy);
         
-        checkFruitCollection(newLocation);
+        checkFruitCollection(newLocation, 2); // Jugador 2 recolecta
 
         checkEnemyCollisions();
         
@@ -291,7 +313,12 @@ public class Level {
         return true;  // Movimiento exitoso
     }
 
-    private void checkFruitCollection(Location location){
+    /**
+     * Verifica y recolecta frutas en la ubicación dada
+     * @param location Ubicación a verificar
+     * @param playerNumber Número del jugador que recolecta (1 o 2)
+     */
+    private void checkFruitCollection(Location location, int playerNumber){
         for(Fruit fruit :fruits){
             if(fruit.getLocation().equals(location) && !fruit.isCollected()){
                 // Si es un Cactus con espinas, no se recolecta (será manejado por checkCactusCollisions)
@@ -301,8 +328,15 @@ public class Level {
                 
                 int points = fruit.collect();
                 if(points > 0){
-                    this.currentScore += points; // Acumular puntos
+                    this.currentScore += points; // Puntaje combinado
                     this.collectedFruits++;
+                    
+                    // Asignar puntos al jugador correspondiente
+                    if (playerNumber == 1) {
+                        this.player1Score += points;
+                    } else if (playerNumber == 2) {
+                        this.player2Score += points;
+                    }
                 }
             }
             
@@ -351,33 +385,38 @@ public class Level {
 
 
     private void checkEnemyCollisions(){
-        Location playerLocation = player.getLocation();
-        for(Enemy enemy : enemies){
-            if(enemy.collidesWithPlayer(playerLocation)){
-                player.die();  // Muerte instantánea al tocar enemigo
-                return;  // No necesita seguir verificando
+        // Verificar colisiones solo si el jugador 1 está vivo
+        if(player != null && player.isAlive()){
+            Location playerLocation = player.getLocation();
+            for(Enemy enemy : enemies){
+                if(enemy.collidesWithPlayer(playerLocation)){
+                    player.die();  // Muerte instantánea al tocar enemigo
+                    break;  // No necesita seguir verificando para este jugador
+                }
             }
         }
         
-        // Verificar colisiones para el jugador 2 si existe
-        if(player2 != null){
+        // Verificar colisiones para el jugador 2 si existe y está vivo
+        if(player2 != null && player2.isAlive()){
             Location player2Location = player2.getLocation();
             for(Enemy enemy : enemies){
                 if(enemy.collidesWithPlayer(player2Location)){
                     player2.die();
-                    return;
+                    break;
                 }
             }
         }
     }
 
     public void moveEnemies(){
-        Location playerLocation = player.getLocation();
         for(Enemy enemy : enemies){
             Location currentLoc = enemy.getLocation();
             
+            // Determinar qué jugador perseguir (el más cercano que esté vivo)
+            Location targetLocation = getClosestPlayerLocation(enemy.getLocation());
+            
             // Usar tryMove que maneja validación y cambio de dirección
-            enemy.tryMove(playerLocation, map);
+            enemy.tryMove(targetLocation, map);
             
             Location newLoc = enemy.getLocation();
             
@@ -404,11 +443,44 @@ public class Level {
                 }
             }
 
-            if(enemy.collidesWithPlayer(playerLocation)){
-                player.die();  // Muerte instantánea al tocar enemigo
-                return;  // No necesita seguir moviendo enemigos
+            // Verificar colisión con jugador 1
+            if(player != null && player.isAlive() && enemy.collidesWithPlayer(player.getLocation())){
+                player.die();
+            }
+            
+            // Verificar colisión con jugador 2
+            if(player2 != null && player2.isAlive() && enemy.collidesWithPlayer(player2.getLocation())){
+                player2.die();
             }
         }
+    }
+    
+    /**
+     * Obtiene la ubicación del jugador más cercano que esté vivo
+     * @param fromLocation Ubicación desde la cual calcular la distancia
+     * @return Ubicación del jugador más cercano, o del jugador 1 si no hay ninguno vivo
+     */
+    private Location getClosestPlayerLocation(Location fromLocation) {
+        Location player1Loc = (player != null && player.isAlive()) ? player.getLocation() : null;
+        Location player2Loc = (player2 != null && player2.isAlive()) ? player2.getLocation() : null;
+        
+        // Si solo hay un jugador vivo, retornarlo
+        if (player1Loc == null && player2Loc != null) {
+            return player2Loc;
+        }
+        if (player2Loc == null && player1Loc != null) {
+            return player1Loc;
+        }
+        if (player1Loc == null && player2Loc == null) {
+            // Ningún jugador vivo, retornar posición por defecto
+            return new Location(0, 0);
+        }
+        
+        // Ambos jugadores vivos, calcular cuál está más cerca
+        double dist1 = fromLocation.distanceTo(player1Loc);
+        double dist2 = fromLocation.distanceTo(player2Loc);
+        
+        return (dist1 <= dist2) ? player1Loc : player2Loc;
     }
 
     public void moveFruits(){
@@ -433,16 +505,30 @@ public class Level {
     }
     
     /**
-     * Crea una línea de hielo en la dirección especificada
+     * Crea una línea de hielo en la dirección especificada desde el jugador 1
      * Se detiene al encontrar una pared, otro hielo, un enemigo, o el límite del mapa
      * Los bloques sobre baldosas calientes se derriten inmediatamente
      */
     public void createIceLine(int dx, int dy){
         if(player == null) return;
+        createIceLineFromPlayer(player.getLocation(), dx, dy);
+    }
+    
+    /**
+     * Crea una línea de hielo en la dirección especificada desde el jugador 2
+     */
+    public void createIceLinePlayer2(int dx, int dy){
+        if(player2 == null) return;
+        createIceLineFromPlayer(player2.getLocation(), dx, dy);
+    }
+    
+    /**
+     * Método auxiliar que crea una línea de hielo desde una posición inicial
+     * Elimina código duplicado entre createIceLine y createIceLinePlayer2
+     */
+    private void createIceLineFromPlayer(Location startLocation, int dx, int dy) {
+        Location currentLoc = startLocation;
         
-        Location currentLoc = player.getLocation();
-        
-        // Crear hielo en línea hasta encontrar obstáculo
         while(true){
             currentLoc = currentLoc.move(dx, dy);
             
@@ -457,99 +543,48 @@ public class Level {
             }
             
             // Detener si hay un enemigo en esta posición
-            boolean hasEnemy = false;
-            for(Enemy enemy : enemies){
-                if(enemy.getLocation().equals(currentLoc)){
-                    hasEnemy = true;
-                    break;
-                }
-            }
-            if(hasEnemy){
+            if(hasEnemyAt(currentLoc)){
                 break;
             }
             
-            // No crear hielo donde está el jugador (aunque no debería pasar)
-            if(player.getLocation().equals(currentLoc)){
-                break;
-            }
-            
-            // No crear hielo donde está el jugador 2
-            if(player2 != null && player2.getLocation().equals(currentLoc)){
+            // No crear hielo donde está algún jugador
+            if(isPlayerAt(currentLoc)){
                 break;
             }
             
             // Crear hielo en esta posición
             map.addIceWall(currentLoc);
             
-            // Verificar si hay baldosa caliente - el hielo se derrite inmediatamente
+            // Si hay baldosa caliente, el hielo se derrite inmediatamente
             if(map.isHotTile(currentLoc)){
                 map.removeIceWall(currentLoc);
-            }
-            
-            // Verificar si hay fogata encendida - se puede crear hielo sobre ella
-            Fogata campfire = map.getCampfireAt(currentLoc);
-            if(campfire != null && campfire.isLit()){
-                // El hielo queda sobre la fogata temporalmente
-                // No hacer nada especial aquí
             }
         }
     }
     
-    public void createIceLinePlayer2(int dx, int dy){
-        if(player2 == null) return;
-        
-        Location currentLoc = player2.getLocation();
-        
-        // Crear hielo en línea hasta encontrar obstáculo
-        while(true){
-            currentLoc = currentLoc.move(dx, dy);
-            
-            // Detener si encontramos pared o límite
-            if(!map.isValidPosition(currentLoc)){
-                break;
-            }
-            
-            // Detener si ya hay hielo
-            if(map.hasIceWall(currentLoc)){
-                break;
-            }
-            
-            // Detener si hay un enemigo en esta posición
-            boolean hasEnemy = false;
-            for(Enemy enemy : enemies){
-                if(enemy.getLocation().equals(currentLoc)){
-                    hasEnemy = true;
-                    break;
-                }
-            }
-            if(hasEnemy){
-                break;
-            }
-            
-            // No crear hielo donde está el jugador 1
-            if(player.getLocation().equals(currentLoc)){
-                break;
-            }
-            
-            // No crear hielo donde está el jugador 2
-            if(player2.getLocation().equals(currentLoc)){
-                break;
-            }
-            
-            // Crear hielo en esta posición
-            map.addIceWall(currentLoc);
-            
-            // Verificar si hay baldosa caliente - el hielo se derrite inmediatamente
-            if(map.isHotTile(currentLoc)){
-                map.removeIceWall(currentLoc);
-            }
-            
-            // Verificar si hay fogata encendida
-            Fogata campfire = map.getCampfireAt(currentLoc);
-            if(campfire != null && campfire.isLit()){
-                // El hielo queda sobre la fogata temporalmente
+    /**
+     * Verifica si hay un enemigo en la ubicación dada
+     */
+    private boolean hasEnemyAt(Location location) {
+        for(Enemy enemy : enemies){
+            if(enemy.getLocation().equals(location)){
+                return true;
             }
         }
+        return false;
+    }
+    
+    /**
+     * Verifica si hay algún jugador en la ubicación dada
+     */
+    private boolean isPlayerAt(Location location) {
+        if(player != null && player.getLocation().equals(location)){
+            return true;
+        }
+        if(player2 != null && player2.getLocation().equals(location)){
+            return true;
+        }
+        return false;
     }
 
     public void breakIceWall(Location location){
@@ -571,26 +606,7 @@ public class Level {
      */
     public void breakIceLine(int dx, int dy){
         if(player == null) return;
-        
-        Location currentLoc = player.getLocation();
-        
-        // Romper hielo en línea hasta encontrar obstáculo
-        while(true){
-            currentLoc = currentLoc.move(dx, dy);
-            
-            // Detener si encontramos límite o pared
-            if(!map.isValidPosition(currentLoc) && !map.hasIceWall(currentLoc)){
-                break;
-            }
-            
-            // Si hay hielo, romperlo
-            if(map.hasIceWall(currentLoc)){
-                breakIceWall(currentLoc);
-            } else {
-                // Si no hay hielo, detener
-                break;
-            }
-        }
+        breakIceLineFromPosition(player.getLocation(), dx, dy);
     }
     
     /**
@@ -600,58 +616,25 @@ public class Level {
      */
     public void breakIceLinePlayer2(int dx, int dy){
         if(player2 == null) return;
-        
-        Location currentLoc = player2.getLocation();
-        
-        // Romper hielo en línea hasta encontrar obstáculo
-        while(true){
-            currentLoc = currentLoc.move(dx, dy);
-            
-            // Detener si encontramos límite o pared
-            if(!map.isValidPosition(currentLoc) && !map.hasIceWall(currentLoc)){
-                break;
-            }
-            
-            // Si hay hielo, romperlo
-            if(map.hasIceWall(currentLoc)){
-                breakIceWall(currentLoc);
-            } else {
-                // Si no hay hielo, detener
-                break;
-            }
-        }
+        breakIceLineFromPosition(player2.getLocation(), dx, dy);
     }
     
     /**
      * Rompe una línea continua de hielo desde una posición en la dirección especificada
-     * @param startPos Posición inicial
+     * @param startPos Posición inicial del jugador
      * @param dx Dirección X (-1, 0, 1)
      * @param dy Dirección Y (-1, 0, 1)
      */
     private void breakIceLineFromPosition(Location startPos, int dx, int dy){
-        if(dx == 0 && dy == 0){
-            return; // Sin dirección válida
-        }
+        if(dx == 0 && dy == 0) return;
         
-        // Comenzar desde la posición adyacente al jugador
         Location currentPos = startPos.move(dx, dy);
         
-        // Romper hielo en línea recta hasta encontrar un espacio vacío o el borde del mapa
-        while(map.isValidPosition(currentPos)){
-            if(map.isIceWall(currentPos)){
-                // Romper este bloque de hielo
-                map.removeIceWall(currentPos);
-                
-                // Si había una fogata en esta posición, apagarla
-                Fogata campfire = map.getCampfireAt(currentPos);
-                if(campfire != null && campfire.isLit()){
-                    campfire.extinguish();
-                }
-                
-                // Continuar en la misma dirección
+        while(map.hasIceWall(currentPos) || map.isValidPosition(currentPos)){
+            if(map.hasIceWall(currentPos)){
+                breakIceWall(currentPos);
                 currentPos = currentPos.move(dx, dy);
             } else {
-                // No es hielo, detenerse
                 break;
             }
         }
@@ -699,6 +682,20 @@ public class Level {
     
     public int getCurrentScore(){
         return this.currentScore;
+    }
+    
+    /**
+     * Obtiene el puntaje del jugador 1 en este nivel
+     */
+    public int getPlayer1Score(){
+        return this.player1Score;
+    }
+    
+    /**
+     * Obtiene el puntaje del jugador 2 en este nivel
+     */
+    public int getPlayer2Score(){
+        return this.player2Score;
     }
     
     /**

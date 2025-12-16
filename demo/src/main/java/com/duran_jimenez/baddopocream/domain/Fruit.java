@@ -1,6 +1,23 @@
 package com.duran_jimenez.baddopocream.domain;
 
+/**
+ * Clase base abstracta para todas las frutas del juego.
+ * 
+ * Las frutas son los coleccionables principales que el jugador debe recoger
+ * para completar cada nivel. Diferentes tipos de frutas tienen diferentes
+ * puntos y comportamientos especiales.
+ * 
+ * Tipos de frutas implementados:
+ * - Banana: Fruta básica estática (10 pts)
+ * - Grapes: Fruta estática (15 pts)
+ * - Cherry: Fruta móvil que escapa del jugador (20 pts)
+ * - Pineapple: Fruta empujable (25 pts)
+ * - Cactus: Fruta con espinas alternantes (30 pts)
+ * 
+ * @author Durán-Jiménez
+ */
 public abstract class Fruit {
+    
     protected String name;
     protected int points;
     protected Location location;

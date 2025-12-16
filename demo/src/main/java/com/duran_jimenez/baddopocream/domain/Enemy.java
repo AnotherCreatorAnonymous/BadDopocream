@@ -1,6 +1,22 @@
 package com.duran_jimenez.baddopocream.domain;
 
+/**
+ * Clase base abstracta para todos los enemigos del juego.
+ * 
+ * Los enemigos persiguen o patrullan el mapa y matan al jugador
+ * al hacer contacto. Cada tipo de enemigo tiene un comportamiento
+ * de movimiento diferente.
+ * 
+ * Tipos de enemigos implementados:
+ * - Troll: Patrulla en línea recta, cambia de dirección al chocar
+ * - Maceta: Persigue directamente al jugador más cercano
+ * - CalamarNaranja: Movimiento aleatorio caótico
+ * - Narval: Comportamiento similar al troll pero más rápido
+ * 
+ * @author Durán-Jiménez
+ */
 public abstract class Enemy implements Movable {
+    
     protected String name;
     protected Location location;
     protected int speed;
